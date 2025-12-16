@@ -1,0 +1,2374 @@
+# 自定义组件开发规范：报价/字段组详情组件
+
+本文档基于“报价详情”组件的开发与迭代过程，总结了构建此类单据详情类组件的最佳实践与规范。适用于 IDE 或 AI 助手快速理解并生成符合标准的代码。
+
+## 1. 项目结构
+
+每个自定义组件由以下三个核心文件组成：
+
+- **`schema.json`**: 定义组件配置、数据源接口及字段映射。
+- **`index.js`**: React 组件逻辑，处理渲染、交互与数据更新。
+- **`style.css`**: 组件样式定义，遵循扁平化与一致性设计原则。
+
+---
+
+## 2. Schema 定义规范 (`schema.json`)
+
+### 2.1 核心结构说明
+自定义组件配置的核心描述文件，以 JSON 结构定义。
+
+- **`system_settings` (系统设置)**:
+  - 用于定义数据源。当组件需要从表格获取数据或需要用户手动输入数据时配置此项。
+  - **`data_sources`**: 数据源数组（支持最多 5 个）。
+    - **`data_type`**: 数据类型，支持 `item_list`（列表型）或 `item_detail`（详情型）。后续在 JS 中通过 `props.data` 获取。
+    - **`contents`**: 定义所需数据项（字段映射）。
+      - 可从表格选择对应字段映射，或手动输入。
+      - 支持定义 `key`（标识）、`type`（类型）、`name`（名称）。
+    - **`available_data_source_types`**: 数据来源类型，支持 `["from_table"]`（来自表格）或 `["manual"]`（手动输入）。
+    - **`from_table`**: 定义表格数据源的特性（筛选、搜索、创建、修改、自动化按钮等）。
+    - **`manual`**: 定义手动输入数据的封面和标题内容。
+
+- **`settings` (自定义设置)**:
+  - 定义组件特有的配置项，用户配置后可在 JS 中通过 `props.custom_setting` 获取。
+  - **Key-Value 结构**:
+    - **`type`**: 支持常规类型（`switch`, `select`, `number`, `text`, `multiText`, `rich`）和特有类型（`image`, `background`, `color`, `icon`）。
+
+- **`layout` (布局设置)**:
+  - 定义配置面板的 UI 结构。
+  - **`web.setting` / `web.style`**: 网页端配置菜单。
+  - **`mobile.setting`**: 移动端配置菜单。
+  - **层级控制**:
+    - **`level`**: 标题样式（1=大标题, 2=小标题, 3=普通）。
+    - **`underline`**: 添加分隔线。
+    - **`setting_key`**: 引用 `settings` 中定义的配置项。
+
+### 2.2 最佳实践原则
+- **数据源类型**: 使用 `item_list` 获取数据，但在逻辑中仅使用第一条数据，以支持字段组的灵活性。
+- **字段分组**: 使用 `multi_fields: true` 将字段分为“可编辑”和“只读”两组，便于布局分离。
+- **功能启用**: 
+  - 显式开启 `show_auto_button: true` 以支持自动化操作按钮。
+  - **关键**: 设置 `"show_card_style_spacing": false` 以移除系统默认内边距，实现全宽布局。
+
+### 2.3 模板示例
+```json
+{
+  "system_settings": {
+    "show_card_style_spacing": false,
+    "data_sources": [
+      {
+        "data_source_id": "item_data",
+        "data_type": "item_list",
+        "name": "数据源名称",
+        "contents": [
+          {
+            "key": "editable_fields",
+            "type": "text",
+            "name": "可编辑字段",
+            "multi_fields": true,
+            "tips": "选择可修改的字段"
+          },
+          {
+            "key": "readonly_fields",
+            "type": "text",
+            "name": "只读字段",
+            "multi_fields": true,
+            "tips": "选择仅展示的字段"
+          }
+        ],
+        "available_data_source_types": ["from_table"],
+        "from_table": {
+          "show_open_method": true,
+          "show_edit_item": true,
+          "show_auto_button": true // 必须开启
+        }
+      }
+    ]
+  },
+  "layout": { "web": { "setting": [], "style": [] }, "mobile": { "setting": [] } }
+}
+```
+
+### 9.10 垂直审批流（企业微信风格）最佳实践总结
+
+- 数据源与 Schema
+  - 使用 `item_list` 并映射 `title`、`content`、`status` 三个字段；进度颜色通过设置项 `progress_color` 跟随页面主题色，便于统一风格。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/schema.json:1-46`。
+
+- 状态标准化与活跃态判定
+  - 统一将布尔、对象、数组、字符串标准化为文本；将以下文本视为“活跃态”：`已选择`、`真`、`true`、`当前`、`进行中`、`审批中`。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:296-304`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:308-314`。
+
+- 垂直进度绘制策略（左轨 + 固定圆点/线段）
+  - 左侧竖直轨道固定在 `left: 11px`；圆点固定宽高 `10px`，水平居中到轨道；线段以“下一节点”的状态决定颜色以增强“进行到下一步”的语义。
+  - 参考样式：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:471-479`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:481-493`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:495-501`。
+  - 参考渲染：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:293-326`。
+
+- 可变化区域与数据区块分离
+  - 进度绘制层与数据内容彻底解耦：使用 `flow-grid` 的两列布局（左列 24px 轨道层，右列为数据区块），将圆点与线段作为独立的绝对定位元素添加到左列容器中，并设置独立 `z-index`，避免受每行 `padding/margin/gap` 影响产生视觉断裂。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:454-459`（两列布局）、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:471-479`（固定轨道）、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:481-501`（固定圆点与线段）、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:293-326`（左列渲染）。
+
+- 间距与线/点对齐
+  - 圆点 `top` 取行标题垂直中心再减半径偏移；线段高度 `segH = max(0, nextY - y - 10)` 以覆盖两点之间的有效间距；固定 `left: 11px` 保证与轨道严格对齐。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:315-323`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:471-479`。
+
+- 颜色注入与主题一致性
+  - 通过 `style` 向根节点注入 `--flow-accent`，优先使用 `props.custom_setting.progress_color`，回退到 `var(--custom-accent)`；活跃圆点与线段统一使用该变量。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:314`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:491-493`。
+
+- 文件预览与点击穿透处理
+  - 文件/图片预览必须在内部点击事件里执行 `e.stopPropagation()`，避免触发外层的行点击跳转；预览使用 `previewFiles` 并传递当前索引。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:47-50`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:80-83`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:129-133`。
+
+- 移动端高度与容器适配
+  - 外层容器高度设为 `auto`，使用 `box-sizing: border-box`；通过对滚动容器设置 `margin-bottom: 0` 消除底部灰色空白。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/style.css:365-371`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:177-181`。
+
+- 旧模式兼容策略
+  - 未配置 `title/content/status` 时，自动回退到表格或移动卡片的原有渲染，不影响既有页面；保留文件类型判断与点击行为一致性。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:390-479`、`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/index.js:480-514`。
+
+- 更新策略与性能取舍
+  - 放弃定时轮询与本地镜像；渲染直接使用平台提供的 `items` 引用，依赖外部数据更新触发重渲染；如需“手动刷新”，建议在交互上提供按钮调用 `setDataParams`。
+  - 参考：`/Users/yangchaoyu/Downloads/自定义组件描述/QuotationComponent/COMPONENT_SPEC.md:1511-1521`（数据刷新 API）。
+
+- 常见陷阱速览
+  - 线不显示：确保左侧容器 `align-items: stretch` 或线段绝对定位的父容器具有可用高度。
+  - 间隙断裂：使用固定线段覆盖法而非单纯伪元素，精确计算两点间高度。
+  - 文本为空：为内容区域提供占位 `flow-blank`，避免布局跳动。
+  - 文件数组：宽松判断 `file_id/url/link/name`，同时在数组渲染中区分文件与普通文本的分隔符（空格/逗号）。
+
+
+### 列表模式模板 (支持分页/搜索)
+当组件用于展示数据列表而非单条详情时，需配置如下：
+
+```json
+{
+  "system_settings": {
+    "data_sources": [
+      {
+        "data_source_id": "item_list_data",
+        "data_type": "item_list",
+        "name": "列表数据源",
+        "contents": [
+          {
+            "key": "title",
+            "type": "text",
+            "name": "标题"
+          },
+          {
+            "key": "image",
+            "type": "image",
+            "name": "图片"
+          }
+        ],
+        "available_data_source_types": ["from_table"],
+        "from_table": {
+          "show_search": true,
+          "show_quick_filter": true,
+          "show_open_method": true
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 3. JS 逻辑实现规范 (`index.js`)
+
+### 3.0 入门示例与调试
+在开始了解 `props` 变量结构之前，可以先通过示例代码渲染出内容，并在控制台观察 `props` 的结构。
+
+```javascript
+export default function (props) {
+  const { data, custom_setting, automation_button, media } = props;
+  console.debug(props);
+  return (
+    <h1>Hello Widget</h1>
+  );
+}
+```
+
+提示：可通过 `console.debug(props);` 方法将变量结构输出到浏览器控制台，进行查看或调试。
+
+### 3.1 数据获取与单条展示
+- 即使数据源是 List，仅渲染 `items[0]`。
+- 判空处理：`if (!items || items.length === 0) return ...`。
+- **无数据状态**: 必须显式渲染“暂无数据”容器，保持布局完整性。
+
+### 3.2 独立的可编辑字段组件 (`EditableField`)
+为避免整页重渲染和焦点丢失，必须将单个字段封装为独立组件。
+
+- **状态管理**: 内部维护 `isEditing` (是否编辑中) 和 `inputValue` (临时值)。
+- **显示/编辑切换**:
+  - **显示态**: 渲染 `div`，显示 `fieldData.value` (带格式/后缀)。
+  - **编辑态**: 渲染 `input`，显示 `fieldData.raw_value` (原始值)，自动 `focus`。
+- **保存机制**:
+  - **触发时机**: `onBlur` (失焦) 和 `onKeyDown` (检测 Enter 键)。
+  - **更新逻辑**: 调用 `item_data.updateItemDetail(itemId, { [fieldKey]: newValue })`。
+
+### 3.3 附件/图片点击预览
+- 必须引入 `import { previewFiles } from '@huoban/page-client-toolkit';`
+- 点击事件处理必须包含强力阻断，防止触发父级（如卡片/行）的跳转事件：
+  ```javascript
+  e.stopPropagation();
+  if (e.nativeEvent && e.nativeEvent.stopImmediatePropagation) {
+      e.nativeEvent.stopImmediatePropagation();
+  }
+  e.preventDefault();
+  previewFiles({ files: val, currentIndex: index, downloadVisible: true });
+  ```
+
+### 3.4 自动化按钮集成
+- 放置在所有字段卡片下方。
+- 传入 `itemId`。
+- **关键**: 不要传递 `flat` 属性，而是通过 CSS 容器宽度控制其平铺行为。
+
+---
+
+## 4. CSS 样式规范 (`style.css`)
+
+### 4.1 布局与留白
+- **容器**: 白色背景，统一内边距（推荐 `24px`）。
+- **卡片**:
+  - 淡灰色边框 (`1px solid #EAEAEA`)。
+  - 无阴影 (`box-shadow: none`)。
+  - 内边距与容器保持一致 (`24px`)。
+  - 底部无 Margin (`margin-bottom: 0`)，依赖容器 Padding 控制底部留白。
+
+### 4.2 移动端卡片优化
+- **背景与圆角**: 容器需设置 `background-color: #f5f5f5;`，并添加 `min-height: 100%; flex-grow: 1; border-radius: 8px; overflow: hidden;` 以防止底部圆角截断。
+- **内边距**: `padding: 12px;` (统一上下左右)。
+- **字段对齐**: 
+  - Label 固定宽度（如 `100px`），不使用 `margin-right`。
+  - Value 左对齐，添加 `padding-left: 16px` 确保间隔。
+
+### 4.3 输入框交互 (无边框设计)
+- **显示态**:
+  - `border: 1px solid transparent` (占位防止抖动)。
+  - `padding-left: 0` (与文本对齐)。
+  - Hover 时显示淡灰背景。
+- **编辑态**:
+  - `border: 1px solid var(--page-accent-color)` (主题色边框)。
+  - `padding-left: 12px` (避免文字贴边)。
+  - 文字颜色变更为主题色。
+
+### 4.4 自动化按钮 (平铺与缩放)
+为强制按钮平铺并调整大小，需遵循以下 CSS 规则：
+
+```css
+.automation-button-container {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #F5F5F5;
+  
+  /* 核心布局：必须使用 block 且宽度 100% 以触发组件平铺模式 */
+  display: block;
+  width: 100%;
+  text-align: right;
+}
+
+.automation-button-container > * {
+  /* 核心缩放：调整按钮大小 (1.25 倍) */
+  transform: scale(1.25);
+  transform-origin: top right;
+  
+  /* 保持 block 布局传递宽度 */
+  display: block;
+  width: 100%;
+}
+```
+
+---
+
+## 5. 关键实现细节总结
+
+1.  **后缀自动隐藏**: 编辑时使用 `raw_value`（无单位），显示时使用 `value`（有单位），实现“编辑纯数字，展示带单位”的效果。
+2.  **按钮防折叠**: `AutomationButton` 组件会根据父容器宽度自动折叠为菜单。**严禁**在容器上使用 `display: flex` 或 `position: absolute`，必须使用 `display: block` 并占满整行，才能强制其平铺展示。
+3.  **事件冒泡阻断**: 在附件预览等嵌套点击事件中，仅 `stopPropagation` 是不够的，必须配合 `stopImmediatePropagation` 才能彻底阻断 React 合成事件向上传播导致的原生跳转。
+4.  **移动端直角修复**: 必须给列表容器添加 `min-height: 100%` 和 `flex-grow: 1`，确保背景色撑满整个组件区域，否则底部留白会导致视觉上的“直角”截断。
+
+---
+
+## 6. 移动端“高度随内容变化”白边问题修复
+
+### 症状
+- 在平台开启“高度随内容变化”时，组件底部出现白边；手动设置固定高度时不出现。
+
+### 根因
+- 外层滚动容器（例如 `.hb-scroll-render-view`，`position: absolute; inset: 0; overflow: auto; margin-bottom: -15px`）通常保持视口高度且为白色背景。
+- 内层内容容器（例如 `[data-feat="dynamic-height"]`）仅按实际内容高度计算，背景为灰色。
+- 两层高度不一致导致外层白底露出，形成底部白边。
+
+### 修复原则
+- 不改变现有视觉样式（卡片边距、圆角、分隔线、文字样式保持不变）。
+- 只在当前组件的祖先链上进行最小化、作用域明确的修复；不影响其他页面。
+
+### 实现步骤
+1) 给移动端根容器挂 `ref`，用于定位祖先容器（`[data-feat="dynamic-height"]` 与 `.hb-scroll-render-view`）。
+2) 在 `useEffect` 中：
+   - 将 `[data-feat="dynamic-height"]` 设为 `min-height: 100%`、`height: auto`，让灰色背景延伸覆盖到外层高度。
+   - 将 `.hb-scroll-render-view` 的 `margin-bottom` 归零，并统一背景为灰色以消除底部白边。
+3) 记录原始样式，在组件卸载时恢复，避免副作用。
+
+### 代码片段（示例）
+```javascript
+// index.js（移动端）
+const rootRef = useRef(null);
+
+useEffect(() => {
+  if (!isMobile || !rootRef.current) return;
+  const el = rootRef.current;
+  const dynamicEl = el.closest('[data-feat="dynamic-height"]');
+  const scrollEl = el.closest('.hb-scroll-render-view');
+
+  const originals = [];
+  const set = (node, styleObj) => {
+    if (!node) return;
+    // 保存原始样式逻辑...
+    Object.assign(node.style, styleObj);
+  };
+
+  // 应用修复
+  set(dynamicEl, { minHeight: '100%', height: 'auto' });
+  set(scrollEl, { marginBottom: '0', backgroundColor: '#f5f5f5' });
+
+  return () => {
+    // 恢复原始样式...
+  };
+}, [isMobile]);
+```
+
+---
+
+## 7. 通用能力与工具函数库 (General Capabilities)
+
+本章节汇总了自定义组件开发中可用的核心工具库与 API，这些工具主要由 `@huoban/page-client-toolkit` 提供，或通过 `props` 传递。
+
+### 7.1 UI 组件库 (@huoban/page-client-toolkit)
+
+需先引用：`import { HBUI } from '@huoban/page-client-toolkit'; const { Icon, Loading, ... } = HBUI;`
+
+- **Icon**: 图标组件。
+  - **用法**: `<Icon type="sun" size="base" fontSource="hbicon" color="red" />`
+  - **参数**:
+    - `size`: 尺寸 (必填) - `min`(16px), `small`(20px), `base`(24px), `middle`(32px), `large`(36px), `max`(48px), `biggest`(96px)。
+    - `fontSource`: 图标库 (可选)
+      - `hbicon`: 系统图标 (默认)。
+      - `fa`: FontAwesome (需配合 `theme="solid"|"brand"` 使用)。
+      - `emoji`: Emoji 表情。
+      - `customer`: 自定义图片 (需在 `type` 中传入图片链接，可配合 `shape="square"|"round"|"circle"` 使用)。
+    - `type`: 图标名称或图片链接。
+    - `color`: 图标颜色。
+    - `data`: (可选) 传入自定义设置中图标选择器返回的对象（自动处理上述参数）。
+    - **示例代码**:
+      ```javascript
+      // 引入页面客户端工具包，并提取出 HBUI 对象
+      import { HBUI } from '@huoban/page-client-toolkit';
+      // 从 HBUI 中获得 Icon 组件
+      const { Icon } = HBUI;
+      
+      export default function (props) {
+        // 图标的 size 参数可选尺寸
+        const sizes = ['min','small','base','middle','large','max','biggest'];
+        // 图标不同 size 参数对应的实际像素尺寸
+        const size_px = ['16px','20px','24px','32px','36px','48px','96px'];
+      
+        const icon_class = "hover:bg-[var(--page-widget-main-4)] leading-[20px] w-full py-2 px-2 rounded-[6px] flex items-center flex-col gap-[4px] border border-[var(--page-widget-main-8)]";
+      
+        return (
+          <div>
+            <div className="mb-[10px]"><strong>图标类型</strong></div>
+            <div className="p-0 flex items-center flex-col gap-[10px]">
+              {/* 伙伴云系统图标 */}
+              <div key="hbicon" className={icon_class} >
+                <Icon size="middle" fontSource="hbicon" type="sun" />
+                HBIcon
+              </div>
+              {/* FontAwesome 图标 */}
+              <div key="fa" className={icon_class} >
+                <Icon size="middle" fontSource="fa" type="table" theme="solid" color="red" />
+                FontAwesome
+              </div>
+              {/* Emoji 图标 */}
+              <div key="emoji" className={icon_class} >
+                <Icon size="middle" fontSource="emoji" type="u1f600" />
+                Emoji
+              </div>
+              {/* Customer 图标 */}
+              <div key="customer" className={icon_class} >
+                <Icon size="middle" fontSource="customer" type={props.media?.image} shape="round" />
+                Customer
+              </div>
+              {/* 自定义设置自选图标 */}
+              <div key="custom" className={icon_class} >
+                <Icon size="middle" data={props.custom_setting?.icon} />
+                自定义设置自选图标
+              </div>
+            </div>
+            <div className="mt-[20px] mb-[10px]"><strong>图标尺寸</strong></div>
+            <div className="p-0 flex items-center flex-col gap-[10px]">
+              {sizes.map((size, index) => (
+                <div key={`hbicon-${index}`} className={icon_class} >
+                  {/* 以标签形式直接引入图标组件，通过 size 参数控制图标大小 */}
+                  <Icon size={size} fontSource="hbicon" type="sun" />
+                  {size} ({size_px[index]})
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      ```
+  - **Loading**: 加载中动画。
+    - **用法**: `<Loading size="default" delay={200} style={{ marginTop: 20 }} />`
+    - **参数**:
+      - `size`: 尺寸 (必填) - `mini`(16px), `small`(20px), `default`(24px), `large`(36px)。
+      - `delay`: 延迟毫秒数 (可选) - 避免快速加载时的闪烁（如 200ms）。
+      - `style`: CSS 样式对象 (可选)。
+    - **示例代码**:
+      ```javascript
+      // 引入页面客户端工具包，并提取出 HBUI 对象
+      import { HBUI } from '@huoban/page-client-toolkit';
+      // 从 HBUI 中获得 Loading 组件
+      const { Loading } = HBUI;
+      
+      export default function (props) {
+        // 图标的 size 参数可选尺寸
+        const sizes = ['mini','small','default','large'];
+        // 图标不同 size 参数对应的实际像素尺寸
+        const size_px = ['16px','24px','36px','48px'];
+      
+        const icon_class = "hover:bg-[var(--page-widget-main-4)] leading-[20px] w-full py-2 px-2 rounded-[6px] flex items-center flex-col gap-[4px] border border-[var(--page-widget-main-8)]";
+      
+        return (
+          <div>
+            <div className="mb-[10px]"><strong>不同尺寸</strong></div>
+            <div className="p-0 flex items-center flex-col gap-[10px]">
+              {sizes.map((size, index) => (
+                <div key={`loading-${index}`} className={icon_class}>
+                  {/* 以标签形式直接引入 Loading 组件，通过 size 参数控制组件大小 */}
+                  <Loading size={size} style={{height: size_px[index]}} />
+                  {size} ({size_px[index]})
+                </div>
+              ))}
+            </div>
+            <div className="mt-[20px] mb-[10px]"><strong>延迟加载</strong></div>
+            <div className="p-0 flex items-center flex-col gap-[10px]">
+              <div key="loading-delay" className={icon_class} >
+                <Loading size="default" delay={2000} style={{height: "36px"}} />
+                延迟 2 秒加载
+              </div>
+            </div>
+          </div>
+        );
+      }
+      ```
+  - **Tooltip**: 文字提示气泡。
+    - **用法**: `<Tooltip title="提示信息" placement="top"><div/></Tooltip>`
+    - **参数**:
+      - `title`: 提示内容 (必填) - 字符串或 ReactNode (支持 HTML 结构)。
+      - `placement`: 弹出方向 (可选) - `top`, `bottom`, `left`, `right` 及其变体（如 `topLeft`, `bottomRight` 等）。
+      - `mouseEnterDelay`: 显示延迟秒数 (可选)。
+      - `mouseLeaveDelay`: 隐藏延迟秒数 (可选)。
+      - `color`: 背景颜色 (可选)。
+- **Message**: 全局提示（Toast）。
+  - 初始化: `const Message = HBUI.createMessage();`
+  - 用法: `Message.success('成功')`, `Message.error('失败')`, `Message.info('提示')`.
+- **UserInfoCard**: 用户名片悬浮窗。
+  - **用法**: `<UserInfoCard userId={id}><img src={avatar} /></UserInfoCard>`
+  - **参数**: `userId` (必填) - 传入用户 ID (String/Number)。
+  - **注意事项**: 
+    - 子元素必须是**单一**的 DOM 节点或 React 元素，不能是 Fragment 或多个节点。
+    - 点击子元素时会自动弹出用户名片。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具 包，并提取出 HBUI 对象
+    import { HBUI } from '@huoban/page-client-toolkit';
+    // 从 HBUI 中获得 UserInfoCard 组件
+    const { UserInfoCard } = HBUI;
+    
+    export default function (props) {
+      const item_data  = props?.data?.item_data;
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-2 px-2 rounded-[6px] flex justify-between items-center gap-[20px] cursor-pointer"
+              onClick={() => {item_data?.onItemClick(item);}}
+            >
+              <span className="whitespace-nowrap overflow-hidden text-ellipsis flex-grow">
+                {item?.title?.value}
+              </span>
+              <span className="flex-shrink-0" onClick={(e) => {e.stopPropagation()}}>
+                {/* 以标签形式调用用户名片组件，参数传入用户ID，点击头像即可打开用户名片 */}
+                <UserInfoCard userId={item?.user?.raw_value?.[0]?.user_id}>
+                  <img
+                    src={item?.user?.raw_value?.[0]?.avatar}
+                    title={item?.user?.raw_value?.[0]?.name}
+                    className="w-[24px] h-[24px] rounded-[12px] object-cover cursor-pointer"
+                  />
+                </UserInfoCard>
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+- **QRCode**: 二维码生成。
+  - **用法**: `<QRCode value="https://..." size={100} />`
+  - **参数**:
+    - `value`: `string` (必填) - 二维码内容。
+    - `size`: `number` (可选) - 尺寸 (默认 128)。
+    - `fgColor`/`bgColor`: `string` (可选) - 前景色/背景色 (默认黑/白，支持 `transparent`)。
+    - `level`: `string` (可选) - 容错率 (`L` 7%, `M` 15%, `Q` 25%, `H` 30%)。
+    - `includeMargin`: `boolean` (可选) - 是否包含边距。
+    - `imageSettings`: `object` (可选) - 内嵌 Logo 设置 `{ src, height, width, excavate }`。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具 包，并提取出 HBUI 对象
+    import { HBUI } from '@huoban/page-client-toolkit';
+    // 从 HBUI 中获得 QRCode 组件
+    const { QRCode } = HBUI;
+    
+    export default function (props) {
+      const item_data  = props?.data?.item_data;
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-2 px-2 rounded-[6px] flex justify-between items-center gap-[20px] cursor-pointer"
+              onClick={() => {item_data?.onItemClick(item);}}
+            >
+              <span className="flex-grow">
+                {item?.title?.value}
+              </span>
+              <span className="flex-shrink-0 border rounded-[6px]" onClick={(e) => {e.stopPropagation()}}>
+                {/* 以标签形式调用二维码组件 */}
+                <QRCode
+                  value={item?.qrcode?.value}
+                  size={100}
+                  level={"Q"}
+                  bgColor={"transparent"}
+                  fgColor={props.env.theme_mode === "light" ? "#000000" : "#FFFFFF"}
+                  includeMargin={true}
+                  marginSize={2}
+                  title={"二维码"}
+                  imageSettings={{
+                    src: item?.user?.raw_value?.[0]?.avatar,
+                    height: 24,
+                    width: 24,
+                    excavate: true,
+                    opacity: 0.8
+                  }}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+- **Barcode**: 条形码生成。
+  - **用法**: `<Barcode text="123456" options={{format: "EAN13"}} />`
+  - **参数**:
+    - `text`: `string` (必填) - 编码到条码中的值。
+    - `style`: `object` (可选) - React Style 对象。
+    - `options`: `object` (可选) - JsBarcode 配置对象 (如 `{ format, width, height, displayValue, background, lineColor, margin }`)。
+      - 常用 `format`: `"CODE128"` (默认), `"EAN13"`, `"EAN8"`, `"CODE39"`, `"ITF14"`, `"MSI"`, `"codabar"`。
+      - 详细配置参考 [JsBarcode Wiki](https://github.com/lindell/JsBarcode/wiki/Options#format)。
+  - **示例代码**:
+    ```javascript
+    /**
+     * Schema Definition:
+     * 
+     * {
+     *   "system_settings": {
+     *     "data_sources": [
+     *       {
+     *         "data_source_id": "item_data",
+     *         "data_type": "item_list",
+     *         "name": "数据源",
+     *         "contents": [
+     *           {
+     *             "key": "title",
+     *             "type": "text",
+     *             "name": "标题"
+     *           },
+     *           {
+     *             "key": "barcode",
+     *             "type": "text",
+     *             "name": "条码内容"
+     *           }
+     *         ],
+     *         "available_data_source_types": [
+     *           "from_table", 
+     *           "manual" 
+     *         ],
+     *         "manual": {
+     *           "title_content_id": "title",
+     *           "show_open_method": false
+     *         }
+     *       }
+     *     ]
+     *   }
+     * }
+     */
+
+    // 引入页面客户端工具 包，并提取出 HBUI 对象
+    import { HBUI } from '@huoban/page-client-toolkit';
+    // 从 HBUI 中获得 Barcode 组件
+    const { Barcode } = HBUI;
+    
+    export default function (props) {
+      const item_data  = props?.data?.item_data;
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-2 px-2 rounded-[6px] flex justify-between items-center gap-[20px] cursor-pointer"
+            >
+              <span className="flex-grow">
+                {item?.title?.value}
+              </span>
+              <span className="flex-shrink-0">
+                {/* 以标签形式调用条码组件 */}
+                <Barcode
+                  text={item?.barcode?.value}
+                  style={{width: 200}}
+                  options={{
+                    format: "EAN13",
+                    width: 2,
+                    height: 60,
+                    displayValue: true,
+                    flat: true
+                  }}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+- **ReactEcharts**: ECharts 图表组件。
+  - **说明**: 页面中提供的统计图表所使用的基础组件库是 ECharts，如希望通过 ECharts 实现更多的定制化图表效果，则可引入 ReactEcharts 组件。
+  - **配置项**: 相关配置项请参考 [ECharts 官方文档](https://echarts.apache.org/zh/option.html)。
+  - **注意事项**: 由于目前尚未支持统计型数据源，故仅支持使用原始数据直接通过图表进行渲染。
+  - **用法**: `<ReactEcharts option={option} style={{height: '400px'}} />`
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具包，并提取出 HBUI 对象
+    import { HBUI } from '@huoban/page-client-toolkit';
+    // 从 HBUI 中获得 ReactEcharts 组件
+    const { ReactEcharts } = HBUI;
+
+    export default function (props) {
+      // 原始数据（目前仅支持此方式渲染图表）
+      const rawData = [
+        { name: '周一', value: 120 },
+        { name: '周二', value: 200 },
+        { name: '周三', value: 150 },
+        { name: '周四', value: 80 },
+        { name: '周五', value: 70 },
+        { name: '周六', value: 110 },
+        { name: '周日', value: 130 }
+      ];
+
+      // ECharts 配置项
+      const option = {
+        title: {
+          text: '周访问量统计'
+        },
+        tooltip: {},
+        xAxis: {
+          type: 'category',
+          data: rawData.map(item => item.name)
+        },
+        yAxis: {
+          type: 'value'
+        },
+        series: [
+          {
+            data: rawData.map(item => item.value),
+            type: 'line'
+          }
+        ]
+      };
+
+      return (
+        <div className="w-full">
+          <ReactEcharts option={option} style={{width: '100%', height: '400px'}} />
+        </div>
+      );
+    }
+    ```
+- **AMap**: 高德地图能力。
+  - **说明**: 产品内位置字段所使用的基础组件库是高德地图。如希望通过高德地图实现业务场景，可引入 `amap` 对象，从中获得 `getAMapLoader` 方法，用于创建地图加载器，通过加载器加载地图组件库。
+  - **用法**: `import { amap } from '@huoban/page-client-toolkit';`
+  - **示例代码**: 以高德地图的点聚合场景为例，演示如何在 JS 脚本中使用 AMap 组件。
+
+    **Schema Definition**:
+    ```json
+    {
+      "system_settings": {
+        "data_sources": [
+          {
+            "data_source_id": "item_data",
+            "data_type": "item_list",
+            "name": "数据源",
+            "contents": [
+              {
+                "key": "position",
+                "type": "text",
+                "name": "位置"
+              },
+              {
+                "key": "title",
+                "type": "text",
+                "name": "标题"
+              },
+              {
+                "key": "value",
+                "type": "text",
+                "name": "数值",
+                "tips": "设置后聚合点将显示数据的总和"
+              }
+            ],
+            "available_data_source_types": [
+              "from_table"
+            ],
+            "from_table": {
+              "show_open_method": true,
+              "show_create_item": false,
+              "show_edit_item": false,
+              "show_search": false,
+              "show_auto_button": false
+            }
+          }
+        ]
+      },
+      "settings": {
+        "cluster_bg_color": {
+          "type": "color",
+          "follow_color": "accent"
+        },
+        "cluster_font_color": {
+          "type": "color",
+          "follow_color": "accent"
+        },
+        "point_bg_color": {
+          "type": "color",
+          "follow_color": "accent"
+        },
+        "point_font_color": {
+          "type": "color",
+          "follow_color": "accent"
+        }
+      },
+      "layout": {
+        "web": {
+          "style": [
+            {
+              "underline": true
+            },
+            {
+              "level": 1,
+              "title": "标记样式",
+              "children": [
+                {
+                  "level": 2,
+                  "title": "聚合点"
+                },
+                {
+                  "level": 3,
+                  "title": "背景颜色",
+                  "setting_key": "cluster_bg_color"
+                },
+                {
+                  "level": 3,
+                  "title": "文字颜色",
+                  "setting_key": "cluster_font_color"
+                },
+                {
+                  "level": 2,
+                  "title": "标记点"
+                },
+                {
+                  "level": 3,
+                  "title": "背景颜色",
+                  "setting_key": "point_bg_color"
+                },
+                {
+                  "level": 3,
+                  "title": "文字颜色",
+                  "setting_key": "point_font_color"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+    ```
+
+    **JavaScript**:
+    ```javascript
+    import React, { useEffect, useRef } from 'react';
+    import _ from 'lodash';
+    // 引入页面客户端工具包，并提取出 amap 对象
+    import { amap, HBUI } from '@huoban/page-client-toolkit';
+
+    // 从 amap 中获得 getAMapLoader 方法
+    const { getAMapLoader } = amap;
+    // 从 HBUI 中获得 Icon 组件，用于显示空提示中的图标
+    const { Icon } = HBUI;
+
+    // 根据数值字段的设置规则来格式化数值结果
+    const formatNumericField = (value, config) => {
+      if (typeof value === 'number' && !isNaN(value)) {
+        const conf = config.config;
+        const value2 = conf?.is_percent === 1 ? value * 100 : value;
+        const value3 = conf?.precision === '' ? value2 : value2.toFixed(parseInt(conf?.precision, 10));
+        const value4 = conf?.separator === 'thousands' ? value3.toLocaleString() : value3;
+        const surfix = conf?.unit_position === 'surfix' ? conf?.unit_suffix : '';
+        const prefix = conf?.unit_position === 'prefix' ? conf?.unit_prefix : '';
+        return prefix + value4 + surfix;
+      } else {
+        return value;
+      }
+    };
+
+    export default function (props) {
+      const mapContainer = useRef(null); // 渲染地图的容器
+      const mapInstance = useRef(null); // 存储地图的实例
+      const mapCluster = useRef(null); // 存储地图的聚合插件
+
+      const item_data  = props?.data?.item_data || {};
+      const hasNumericField = item_data?.field_configs?.value && item_data?.field_configs?.value?.data_type === 'numeric' ? true : false;
+
+      const setMapData = () => {
+        if (!mapInstance.current || !mapCluster.current) return; // 当地图实例不存在，则不再继续执行
+
+        // 创建聚合点数据
+        const points = [];
+        item_data?.items.map((item) => {
+          points.push({
+            item: item,
+            weight: 1,
+            lnglat: [item?.position?.raw_value?.coordinate?.lon, item?.position?.raw_value?.coordinate?.lat]
+          });
+        });
+
+        // 动态计算地图中心点及缩放层级
+        let minLng = Infinity;
+        let maxLng = -Infinity;
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+
+        points.map((point) => {
+          const lng = point.lnglat[0];
+          const lat = point.lnglat[1];
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;        
+        });
+
+        const center = [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
+
+        // 创建经纬度边界对象
+        const bounds = new AMap.Bounds(
+          [minLng, minLat],
+          [maxLng, maxLat]
+        );
+
+        // 计算合适的缩放层级和中心点
+        const view = mapInstance.current.getFitZoomAndCenterByBounds(bounds, [40, 40, 40, 40]);
+        // 设置地图中心点及缩放层级
+        mapInstance.current.setZoomAndCenter(view[0], [view[1].lng, view[1].lat], false, 1000);
+
+        // 设置聚合数据
+        mapCluster.current.setData(points);
+      }
+
+      useEffect(() => {
+        let isMounted = true; // 地图组件挂载状态标识
+
+        const initMap = async () => {
+          try {
+            const AMapLoader = await getAMapLoader(); // 异步加载地图的 SDK 包
+            const AMap = await AMapLoader.load(); // 将地图 SDK 加载到的组件中
+            
+            if (!mapContainer.current || !isMounted) return; // 当地图实例存在或地图组件已经挂载，则不再继续初始化
+
+            // 1. 创建地图：调用地图 SDK 提供的方法创建地图实例，有了地图实例后就可以按照地图的开发文档进行开发
+            mapInstance.current = new AMap.Map(mapContainer.current, {
+              zoom: 15, // 地图级别
+              resizeEnable: true
+            });
+
+            // 2. 初始化地图风格
+            mapInstance.current.setMapStyle(props.env.theme_mode === 'dark' ? 'amap://styles/dark' : 'amap://styles/normal');
+
+            // 3. 设置聚合点样式
+            var _renderClusterMarker = function (context) {
+              //context 为回调参数，包含如下属性 marker:当前聚合点，count:当前聚合点内的点数量
+              const valueSum = _.chain(context.clusterData)
+                .map(item => _.get(item, '_amapMarker.originData[0]', []))
+                .flatten()
+                .sumBy('item.value.raw_value')
+                .value();
+              
+              const valueSumString = hasNumericField ? formatNumericField(valueSum, item_data?.field_configs?.value) : 0;
+              const clusterCount = hasNumericField ? valueSumString : context.count; //聚合点内点数量
+              
+              context.marker.setContent(
+                '<div class="cluster-maker">' + clusterCount + "</div>"
+              );
+          
+              // 监听聚合点的 click 事件：地图级别+1
+              context.marker.on('click', () => {
+                if (mapInstance.current) {
+                  mapInstance.current.setZoomAndCenter(mapInstance.current.getZoom() + 1, context.marker.getPosition(), false, 500);
+                }
+              });
+            };
+            
+            // 4. 设置非聚合点样式
+            var _renderMarker = function (context) {
+              //context 为回调参数，包含如下属性 marker:当前非聚合点
+              const item = context?.data?.[0]?.item;
+              
+              context.marker.setContent(
+                `<div class="maker">
+                  <div class="title">${item?.title?.value}</div>
+                  ${hasNumericField && item?.value?.value ? `<div class="desc">${item_data?.field_configs?.value?.name}：${item?.value?.value}</div>` : ''}
+                </div>`
+              );
+              context.marker.setAnchor('top-center');
+              
+              // 监听 marker 的 click 事件：打开数据详情
+              context.marker.on('click', (e) => {
+                if (item_data && typeof item_data?.onItemClick === 'function') {
+                  item_data?.onItemClick(item);
+                }
+              });
+            };
+        
+            // 5. 添加聚合组件
+            mapInstance.current.plugin(["AMap.MarkerCluster"], function () {
+              mapCluster.current = new AMap.MarkerCluster(
+                mapInstance.current, //地图实例
+                [], //海量点数据，数据中需包含经纬度信息字段 lnglat
+                {
+                  gridSize: 100, //数据聚合计算时网格的像素大小
+                  renderClusterMarker: _renderClusterMarker, //上述步骤的自定义聚合点样式
+                  renderMarker: _renderMarker, //上述步骤的自定义非聚合点样式
+                }
+              );
+            });
+
+            // 6. 设置地图数据
+            setMapData();
+
+          } catch (error) {
+            console.debug('地图初始化失败:', error);
+          }
+        };
+
+        initMap();  // 初始化地图
+        
+        return () => { // 清理函数
+          isMounted = false; // 标记地图组件已卸载
+          if (mapInstance.current) { // 销毁地图实例
+            console.debug('destroy');
+            mapInstance.current.destroy();
+            mapInstance.current = null;
+          }
+        };
+      }, []);
+
+      useEffect(() => {
+        // 设置地图数据
+        setMapData();
+      }, [props.data]);
+
+      // 监控 props.env.theme_mode 变化来设置地图的深浅色
+      useEffect(() => {
+        if (mapInstance.current) {
+          mapInstance.current.setMapStyle(props.env.theme_mode === 'dark' ? 'amap://styles/dark' : 'amap://styles/normal');
+        }
+      }, [props.env.theme_mode]);
+
+      // 点样式
+      const setting = props?.custom_setting;
+      const style = {
+        '--cluster-bg-color': setting?.cluster_bg_color ? setting?.cluster_bg_color : 'transparent',
+        '--cluster-font-color': setting?.cluster_font_color ? setting?.cluster_font_color : 'var(--page-body-color-follow)',
+        '--point-bg-color': setting?.point_bg_color ? setting?.point_bg_color : 'transparent',
+        '--point-font-color': setting?.point_font_color ? setting?.point_font_color : 'var(--page-body-color-follow)',
+      };
+
+      // 如果获取到的数据少于 1 条，则给出空提示
+      if (item_data && item_data?.items.length < 1) {
+        return (
+          <div className="empty">
+            <Icon size="middle" type="tray-solid" fontSource="hbicon" />
+            暂无数据
+          </div>
+        );
+      }
+
+      return (
+        <div ref={mapContainer} className="w-full h-full rounded-[9px]" style={style} />
+      );
+    };
+    ```
+
+    **CSS**:
+    ```css
+    /* 聚合点样式 */
+    .cluster-maker {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 700;
+      background-color: var(--cluster-bg-color);
+      color: var(--cluster-font-color);
+      min-width: 32px;
+      border-radius: 100%;
+      aspect-ratio: 1 / 1;
+      padding: 2px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    /* 数据点样式 */
+    .maker {
+      font-size: 12px;
+      line-height: 16px;
+      background-color: var(--point-bg-color);
+      color: var(--point-font-color);
+      border-radius: 6px;
+      padding: 2px 4px;
+      width: fit-content;
+      white-space: nowrap;
+      .title {
+        font-weight: 700;
+      }
+      .desc {
+        opacity: 0.85;
+      }
+    }
+    .maker::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 5px;
+      border-style: solid;
+      border-color: var(--point-bg-color) transparent transparent transparent;
+    }
+    ```
+- **WeCom JS-SDK**: 企业微信 JS-SDK 能力。
+  - **说明**: 在企业微信环境下如果安装了伙伴云的应用，则系统支持使用应用的授权来初始化企业微信的 JS-SDK，初始化完成后则可任意调用企业微信 JS-SDK 提供的 JSAPI 了。
+  - **开发指南**: [企业微信 JS-SDK 开发指南](https://developer.work.weixin.qq.com/document/path/90546)。
+  - **用法**: `import { registerJsSdk, BrowserHelper } from '@huoban/page-client-toolkit';`
+  - **示例代码**: 以在企业微信聊天侧边栏中“分享接口 - 自定义转发到会话”为例，演示如何在 JS 脚本中调用企业微信的 JSAPI。
+    ```javascript
+    // 引入页面客户端工具包，并提取出 registerJsSdk(第三方 JS-SDK 初始化方法)、HBUI(UI 组件)、BrowserHelper(浏览器环境)
+    import { registerJsSdk, HBUI, BrowserHelper } from '@huoban/page-client-toolkit';
+    // 从 HBUI 中获取 createMessage 方法
+    const { createMessage } = HBUI;
+    // 执行 createMessage 方法创建出 Message 全局提示对象
+    const Message = createMessage();
+
+    export default function (props) {
+      const sendMessage = async () => {
+        // 通过浏览器环境判断是否在企业微信的环境内
+        if (!BrowserHelper?.isWechatWork()) {
+          Message.info('请在企业微信客户端内使用');
+          return false;
+        }
+        // 调用前先要初始化注册企微的 JS-SDK，并传入需要使用的 jsApiList
+        const isRegisterSuccess = await registerJsSdk({
+          weChatWorkOptions: {
+            appType: 'priv', // 指定使用当前企业的哪个企业微信应用来初始化，默认不设置为选择主应用，priv 自建应用
+            isAgentConfig: true, // 使用 wx.agentConfig 方式初始化企微的 JS-SDK 授权
+            jsApiList: ["sendChatMessage"] // 传入需要使用的企微 JS-SDK 的 jsapi 列表
+          }
+        });
+        // 如果注册失败，则提示错误
+        if (!isRegisterSuccess) {
+          Message.info('初始化企业微信 JS-SDK 失败');
+          return false;
+        }
+        // 调用企微 JS-SDK 的 wx 对象前，判断其是否存在
+        if (typeof wx !== 'undefined') {
+          // 调用企微 JS-SDK 提供的方法
+          wx.invoke('sendChatMessage', {
+            msgtype:"news", //消息类型，必填，支持文本(“text”)，图片(“image”)，视频(“video”)，文件(“file”)，H5(“news”）和小程序(“miniprogram”)
+            news:
+            {
+                link: "https://work.weixin.qq.com", //H5消息页面url 必填
+                title: "企业微信 - 连接创造价值", //H5消息标题
+                desc: "来自自定义组件的分享", //H5消息摘要
+                imgUrl: "https://wwcdn.weixin.qq.com/node/wework/images/202201062104.366e5ee28e.png", //H5消息封面图片URL
+            }
+          }, function(res) {
+            if (res.err_msg == "sendChatMessage:ok") {
+              Message.success('发送成功');
+            } else {
+              console.debug(JSON.stringify(res));
+              Message.warning('发送失败');
+            }
+          })
+        } else {
+          Message.info('请在企业微信客户端内使用');
+        }
+      };
+      return (
+        <div onClick={sendMessage} className="flex justify-center items-center w-full h-full cursor-pointer">
+          发送“企业微信 - 连接创造价值”到聊天框
+        </div>
+      );
+    }
+    ```
+- **BrowserHelper**: 浏览器环境检测工具。
+  - **说明**: 在开发自定义组件时，经常需要判断不同的浏览器环境，来实现特定的功能或做兼容性处理。为了可以更便捷的获取浏览器环境信息，则可引入 `BrowserHelper` 对象，即可轻松获取各种环境状态。
+  - **用法**: `import { BrowserHelper } from '@huoban/page-client-toolkit';`
+  - **常用方法**:
+    - `isMobile()`: `boolean` - 是否处于移动端模式。
+    - `isApp()`: `boolean` - 是否在伙伴云移动端的 H5 项目。
+    - `isInRNAppWeb()`: `boolean` - 是否在伙伴云手机 App 中，包括 iOS、Android、鸿蒙的 App。
+    - `isHuoBanOhApp()`: `boolean` - 是否在伙伴云鸿蒙手机 App 中。
+    - `isHarmonyOS()`: `boolean` - 是否在华为鸿蒙系统中（5.0 以上肯定准确）。
+    - `isSafari()`: `boolean` - 是否处于 Safari 浏览器中。
+    - `isAnyWechat()`: `boolean` - 是否处于微信或企业微信浏览器中，包括手机和电脑应用。
+    - `isWechat()`: `boolean` - 是否处于微信浏览器中，包括手机和电脑应用。
+    - `isWechatWork()`: `boolean` - 是否处于企业微信浏览器中，包括手机和电脑应用。
+    - `isFeishu()`: `boolean` - 是否处于飞书内嵌浏览器中，包括手机和电脑应用。
+    - `isDingTalk()`: `boolean` - 是否处于钉钉内嵌浏览器中，包括手机和电脑应用。
+    - `browserType()`: `string` - 浏览器类型名称。
+    - `browser`: `object` - 浏览器的详细信息，可以自行用 `console.debug()` 输出到控制台详细查看。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具包，并提取出 BrowserHelper 对象 
+    import { BrowserHelper } from '@huoban/page-client-toolkit';
+
+    const toString = (value) => {
+      if (typeof value === 'boolean') {
+        return value ? 'true' : 'false';
+      } else if (typeof value === 'string') {
+        return value;
+      } else if (typeof value === 'object') {
+        return JSON.stringify(value);
+      }
+    }
+
+    export default function (props) {
+      return (
+        <div>
+          <div><strong>isMobile(): </strong>{toString(BrowserHelper.isMobile())}</div>
+          <div><strong>isApp(): </strong>{toString(BrowserHelper.isApp())}</div>
+          <div><strong>isInRNAppWeb(): </strong>{toString(BrowserHelper.isInRNAppWeb())}</div>
+          <div><strong>isHuoBanOhApp(): </strong>{toString(BrowserHelper.isHuoBanOhApp())}</div>
+          <div><strong>isHarmonyOS(): </strong>{toString(BrowserHelper.isHarmonyOS())}</div>
+          <div><strong>isSafari(): </strong>{toString(BrowserHelper.isSafari())}</div>
+          <div><strong>isAnyWechat(): </strong>{toString(BrowserHelper.isAnyWechat())}</div>
+          <div><strong>isWechat(): </strong>{toString(BrowserHelper.isWechat())}</div>
+          <div><strong>isWechatWork(): </strong>{toString(BrowserHelper.isWechatWork())}</div>
+          <div><strong>isFeishu(): </strong>{toString(BrowserHelper.isFeishu())}</div>
+          <div><strong>isDingTalk(): </strong>{toString(BrowserHelper.isDingTalk())}</div>
+          <div><strong>browserType(): </strong>{toString(BrowserHelper.browserType())}</div>
+          <div><strong>browser: </strong>{toString(BrowserHelper.browser)}</div>
+        </div>
+      );
+    }
+    ```
+- **AutomationButton**: 自动化按钮（快捷按钮）。
+  - 来源: `props.data.item_data.AutomationButton` (非 HBUI)
+  - 用法: `<AutomationButton itemId={item.id} />`
+  - **前提**: 在 Schema 的数据源配置中开启 `show_auto_button: true`。
+  - **参数**: `itemId` (必填) - 传入数据 ID。
+  - **示例代码**:
+    ```javascript
+    export default function (props) {
+      const item_data  = props?.data?.item_data;
+      // 从数据源中获取 AutomationButton 组件
+      const { AutomationButton } = item_data || {};
+      
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              onClick={() => {item_data?.onItemClick(item);}}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-1.5 px-2 rounded-[6px] cursor-pointer flex justify-between items-center"
+            >
+                <span>{item?.title?.value}</span>
+                {/* 仅当组件存在时渲染 */}
+                {AutomationButton && <AutomationButton itemId={item?.id} />}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+
+### 7.2 数据交互方法 (props.data)
+
+以下方法通常挂载在 `props.data.数据源ID` 下（如 `props.data.item_data`）：
+
+#### 7.2.1 item_list 数据源对象结构
+当 `data_type` 为 `item_list` 时，`props.data.dataSourceId` 返回的对象包含以下核心只读属性，用于自定义翻页与列表渲染：
+
+- **items**: `Array<Object>` - 数据项数组，包含所有当前页的数据。
+- **total**: `Number` - 数据总条数。
+- **page_size**: `Number` - 每页数据条数（默认 20，可通过 setDataParams 修改）。
+- **current_page**: `Number` - 当前页码（从 0 开始）。
+- **offset**: `Number` - 当前数据的偏移量（通常为 `current_page * page_size`）。
+- **has_relation_filter**: `Boolean` - 是否已配置联动筛选。
+- **field_configs**: `Object` - 字段原始配置（仅限表格数据源）。存储每个数据项映射到的表格字段的原始配置。
+- **rights**: `Object` - 权限集合（仅限表格数据源）。
+  - **table**: `Array<string>` - 表格权限（如 `['item_create']`）。
+  - **items**: `Object` - 列表项权限（Key 为数据 ID，Value 为权限数组 `['update', 'delete']`）。
+  - **item**: `Array<string>` - 详情页数据权限（如 `['update', 'delete']`）。
+
+**多字段项 (multi) 返回结构**
+- 当 `contents` 中某数据项的 `multi` 参数为 `true` 时，该数据项会映射多个原始字段，返回值为数组结构：
+  - `value`: `Array<any>` - 每个元素对应一个被映射字段的展示值，数组顺序即为字段选择顺序。
+  - `raw_value`: `Array<any>` - 每个元素对应一个被映射字段的原始值，顺序与 `value` 一致。
+  - `field_configs`: `Array<object>` - 每个元素为对应映射字段的原始配置，顺序与 `value` 一致。
+
+#### 7.2.2 核心方法
+- **onItemClick(item, options?)**: 封装了复杂的跳转逻辑（支持配置跳转到详情页、链接地址、打开方式等）。
+  - **背景**: 组件设置数据源后，用户可配置点击数据之后“跳转到”的目标（不跳转、指定详情页、文本字段链接）及打开方式（新窗口、当前窗口）。该方法自动兼容这些复杂场景，无需开发者手动处理。
+  - **函数定义**: `onItemClick(item: object, options: {itemIds: string[]})`
+  - **参数**:
+    - `item`: `object` (必填) - 传入从数据源获取到的整条数据的对象。
+    - `options.itemIds`: `string[]` (可选) - 如果希望在打开数据详情后按照给定的数据列表进行上一页、下一页，则可在传入数据的 ID 列表。
+  - **示例代码**:
+    ```javascript
+    import _ from 'lodash';
+    export default function (props) {
+      const item_data = props?.data?.item_data;
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              // 在 onclick 事件中直接调用数据源提供的 onItemClick() 方法，并传入整个数据变量
+              // 通过 lodash 提供的 map 函数可以轻松的从 items 对象数组中取出 id 参数的结果数组
+              onClick={() => {item_data?.onItemClick(item, {itemIds: _.map(item_data?.items, 'id')});}}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-1.5 px-2 rounded-[6px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap"
+            >
+                {item?.title?.value}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+  - **updateItemDetail(itemId, fields, options?)**: 更新数据字段。
+  - **函数定义**: `updateItemDetail(itemId: string, fieldValues: {[key: string]: any}, options: {allowGuide: boolean})`
+  - **参数**:
+    - `itemId`: 数据 ID。
+    - `fieldValues`: 字段键值对。
+    - `options.allowGuide`: 是否执行填写向导（默认 true）。
+  - **权限判断**: 
+    - 整条数据权限: 检查 `rights.items` (列表) 或 `rights.item` (详情) 是否包含 `'update'`。
+    - 字段级权限: 检查数据项中的 `can_view`、`can_update`、`can_lock`、`locked`。
+      - `can_view`: 是否可查看。为 `false` 时该字段不返回 `value` 与 `raw_value`。
+      - **注意**: 如果 `locked` 为 true 且 `can_lock` 为 false，则即使 `can_update` 为 true 也不可编辑。
+  - **支持的字段值格式**:
+    ```javascript
+    // 文本/扫码/号码/邮箱
+    { key: "abc" }
+    // 多行文本 (支持换行)
+    { key: "abc\ndef" }
+    // 富文本 (HTML)
+    { key: "<p><b>Bold</b></p>" }
+    // 数值/金额/进度条/评分 (原值，百分比需转小数)
+    { key: 0.56 } // 56%
+    // 开关
+    { key: true }
+    // 日期 (标准格式，精度不足需补全)
+    { key: "2025-04-28" }
+    { key: "2025-04-28 10:10:00" }
+    // 选项 (ID 数组)
+    { key: [1, 2] }
+    // 用户 (ID 数组)
+    { key: [11012] }
+    // 关联 (数据 ID 数组)
+    { key: [2300007767500473] }
+    ```
+  - **应用场景示例**:
+      - **配置**: 主数据源选择包含各类型字段的表格；辅助数据源选择关联表（用于提供备选数据）。
+      - **代码演示**: 详见 `update_item_example.js` (覆盖了文本、数值、日期、选项、用户、关联等字段的编辑逻辑)。
+  - **openCreatePage(defaults)**: 打开数据创建页。
+  - **权限**: 建议先检查 `props.data.dataSourceId.rights.table` 是否包含 `'create'`。
+  - **参数**: `defaults: {[key: string]: any}` (可选)
+    - 对象的 key 对应 Schema 中定义的 contents key 名。
+    - 传入的值优先级最高，会覆盖组件配置中的默认值。
+    - 典型用法: `openCreatePage({ title: "New Item", date: "current_day" })`。
+    - **支持的默认值格式**:
+      ```javascript
+      // 文本/扫码/号码
+      { key: "abc" }
+      // 多行文本 (支持换行符)
+      { key: "abc\ndef" }
+      // 富文本 (支持 HTML)
+      { key: "<p><b>Bold</b></p>" }
+      // 数值/金额 (纯数字，无单位)
+      { key: 10 }
+      // 日期 (支持时间戳、字符串、动态值)
+      { key: "2025-04-28 10:10:00" }
+      { key: "current_day" } // 当日
+      { key: "next_day" }    // 次日
+      // 选项 (ID 数组，单选也需传数组)
+      { key: [1, 2] }
+      // 用户 (用户 ID 数组，支持 "myself")
+      { key: [11012, "myself"] }
+      // 关联 (数据 ID 数组)
+      { key: [2300007767500473] }
+      // 位置 (仅支持当前位置)
+      { key: "current_location" }
+      // 直接使用 raw_value (最便捷方式)
+      { key: props.data.item_data.items[0].user.raw_value }
+      ```
+    - **应用场景示例：资源调度**:
+      - **场景**: 每日客服服务量排班。
+      - **配置**:
+        - 数据源1 (资源): 客服列表，包含“单位资源容量”字段。
+        - 数据源2 (资源占用): 服务申请记录，包含“资源(关联)”、“日期”、“分组”字段。
+      - **逻辑**: 在界面网格中点击“+”号时，调用 `openCreatePage` 并自动填充当前的“客服(资源)”、“日期”和“分组”。
+      - **限制**: 当某格子内的记录数达到“单位资源容量”时，隐藏“+”按钮。
+      - **示例代码**:
+      ```javascript
+      /**
+       * Schema Definition:
+       * 
+       * {
+       *   "system_settings": {
+       *     "data_sources": [
+       *       {
+       *         "data_source_id": "resources",
+       *         "data_type": "item_list",
+       *         "name": "资源",
+       *         "contents": [
+       *           { "key": "name", "type": "text", "name": "资源名称" },
+       *           { "key": "allocation", "type": "number", "name": "单位资源容量" }
+       *         ],
+       *         "available_data_source_types": ["from_table"]
+       *       },
+       *       {
+       *         "data_source_id": "allocations",
+       *         "data_type": "item_list",
+       *         "name": "资源占用",
+       *         "contents": [
+       *           { "key": "resource", "type": "text", "name": "资源" },
+       *           { "key": "date", "type": "date", "name": "日期" },
+       *           { "key": "group", "type": "select", "name": "分组" },
+       *           { "key": "title", "type": "text", "name": "标题" }
+       *         ],
+       *         "available_data_source_types": ["from_table"]
+       *       }
+       *     ]
+       *   }
+       * }
+       */
+      
+      import _ from 'lodash';
+      import { HBUI } from '@huoban/page-client-toolkit';
+      const { Icon } = HBUI;
+      
+      export default function (props) {
+        // 提取自定义设置
+        const { custom_setting = {} } = props || {};
+        // 提取资源和占用的数据源
+        const { resources = {}, allocations = {} } = props?.data || {};
+        // 提取资源占用的分组字段
+        const group = allocations?.field_configs?.group;
+        // 是否有创建资源的占用权限
+        const canCreate = allocations?.rights?.table?.some(right => right.includes('create'));
+        // 处理显示的日期范围
+        const dates = [];
+        const startDate = new Date("2025-04-27");
+        const dateLength = 7;
+        for (let i = 0; i < dateLength; i++) {
+          const nextDate = new Date(startDate);
+          nextDate.setDate(startDate.getDate() + i);
+          const year = nextDate.getFullYear();
+          const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+          const day = String(nextDate.getDate()).padStart(2, '0');
+          dates.push(`${year}-${month}-${day}`);
+        }
+        // 处理数据归属
+        const cellMap = {};
+        allocations?.items?.forEach(item => {
+          const resourceIndex = item?.resource?.raw_value?.[0]?.item_id || '';
+          const groupIndex = item?.group?.value?.[0].id || '';
+          const dateIndex = item?.date?.value || '';
+          const key = group ? `${resourceIndex}-${groupIndex}-${dateIndex}` : `${resourceIndex}-${dateIndex}`;
+          if (!cellMap[key]) {
+            cellMap[key] = [];
+          }
+          // 确保数据有标题
+          if (item?.title?.value) {
+            cellMap[key].push(item);
+          }
+        });
+        // 如果获取到的资源少于 1 条，则给出空提示
+        if (resources?.items?.length < 1) {
+          return (
+            <div className="empty">
+              <Icon size="middle" type="tray-solid" fontSource="hbicon" />
+              暂无数据
+            </div>
+          );
+        }
+        // 文字颜色对象
+        const text_color = { 'follow': 'inherit', 'dark': '0,0,0', 'light': '255,255,255' };
+        // 添加样式控制变量
+        const style = {
+          '--group_cell_bg': custom_setting?.table_background ? custom_setting?.table_background?.backgroundColor : 'var(--page-body-background-follow)',
+          '--container-base-text-color-rgb': custom_setting?.table_text ? text_color[custom_setting?.table_text] : 'inherit',
+          '--table_border_radius': custom_setting?.table_border_radius ? '9px' : '0px',
+          '--resource_column_width': custom_setting?.resource_column_width ? `${custom_setting.resource_column_width}px` : 'auto',
+          '--group_column_width': custom_setting?.group_column_width ? `${custom_setting.group_column_width}px` : 'auto',
+          '--date_column_width': custom_setting?.date_column_width ? `${custom_setting.date_column_width}px` : 'auto',
+          '--table_width': custom_setting?.resource_column_width && custom_setting?.group_column_width && custom_setting?.date_column_width ? 'auto' : '100%',
+          '--page-widget-body-color': 'rgba(var(--container-base-text-color-rgb), 1)',
+          '--page-widget-body-title-color': 'rgba(var(--container-base-text-color-rgb), 0.85)',
+          '--page-widget-body-primary-color': 'rgba(var(--container-base-text-color-rgb), 0.65)',
+          '--page-widget-body-secondary-color': 'rgba(var(--container-base-text-color-rgb), 0.45)',
+          '--page-widget-body-disabled-color': 'rgba(var(--container-base-text-color-rgb), 0.25)',
+          '--page-widget-body-divider-color': 'rgba(var(--container-base-text-color-rgb), 0.04)',
+          '--page-widget-body-title-bottom-color': 'rgba(var(--container-base-text-color-rgb), 0.04)',
+          '--page-widget-tag-background-color': 'rgba(var(--container-base-text-color-rgb), 0.04)',
+          '--page-widget-main': 'rgba(var(--container-base-text-color-rgb), 1)',
+          '--page-widget-main-85': 'rgba(var(--container-base-text-color-rgb), 0.85)',
+          '--page-widget-main-70': 'rgba(var(--container-base-text-color-rgb), 0.7)',
+          '--page-widget-main-65': 'rgba(var(--container-base-text-color-rgb), 0.65)',
+          '--page-widget-main-45': 'rgba(var(--container-base-text-color-rgb), 0.45)',
+          '--page-widget-main-25': 'rgba(var(--container-base-text-color-rgb), 0.25)',
+          '--page-widget-main-8': 'rgba(var(--container-base-text-color-rgb), 0.08)',
+          '--page-widget-main-4': 'rgba(var(--container-base-text-color-rgb), 0.04)',
+          'color': 'var(--page-widget-body-color)'
+        };
+        return (
+          <div className="schedule-wrapper" style={Object.assign({}, style, custom_setting?.table_background)}>
+            <div className="schedule-table">
+              <table className="has_border">
+                <thead>
+                  <tr>
+                    <th className="row-resource">{resources?.field_configs?.name?.name}</th>
+                    {group && <th className="row-group">{group?.name}</th>}
+                    {dates && dates.map((date) => (
+                      <th className="row-date">{date}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {resources?.items.map((resource) => {
+                    if (group) {
+                      return group?.config?.options.map((option, groupIndex) => {
+                        return (
+                          <tr key={`${resource?.id}-${option?.id}`}>
+                            {groupIndex === 0 && <td className="row-resource" rowSpan={group?.config?.options.length}>{resource?.name?.value}</td>}
+                            <td className="row-group">{option?.name}</td>
+                            {dates && dates.map((date) => (
+                              <td className="row-date">
+                                {(canCreate || cellMap[`${resource.id}-${option.id}-${date}`]) && (
+                                  <ul className="cell-list">
+                                    {cellMap[`${resource.id}-${option.id}-${date}`] && cellMap[`${resource.id}-${option.id}-${date}`].map((item, itemIndex) => (
+                                      <li
+                                        key={itemIndex}
+                                        onClick={() => { allocations.onItemClick?.(item, { item_ids: _.map(cellMap[`${resource.id}-${option.id}-${date}`], 'id') }); }}
+                                      >
+                                        {item?.title?.value}
+                                      </li>
+                                    ))}
+                                    {canCreate && (!cellMap[`${resource.id}-${option.id}-${date}`] || cellMap[`${resource.id}-${option.id}-${date}`]?.length < resource?.allocation?.value) && (
+                                      <li
+                                        className="createButton"
+                                        onClick={() => {allocations.openCreatePage({
+                                          date: new Date(date).getTime(),
+                                          group: [option.id],
+                                          resource: [resource.id]
+                                        })}}
+                                      >
+                                        <Icon size="min" type="plus" fontSource="hbicon" />
+                                      </li>
+                                    )}
+                                  </ul>
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      });
+                    } else {
+                      return (
+                        <tr key={resource?.id}>
+                          <td className="row-resource">{resource?.name?.value}</td>
+                          {dates && dates.map((date) => (
+                            <td className="row-date">
+                              {(canCreate || cellMap[`${resource.id}-${date}`]) && (
+                                  <ul className="cell-list">
+                                    {cellMap[`${resource.id}-${date}`] && cellMap[`${resource.id}-${date}`].map((item, itemIndex) => (
+                                      <li
+                                        key={itemIndex}
+                                        onClick={() => { allocations.onItemClick?.(item, { item_ids: _.map(cellMap[`${resource.id}-${date}`], 'id') }); }}
+                                      >
+                                        {item?.title?.value}
+                                      </li>
+                                    ))}
+                                    {canCreate && (!cellMap[`${resource.id}-${date}`] || cellMap[`${resource.id}-${date}`]?.length < resource?.allocation?.value) && (
+                                      <li
+                                        className="createButton"
+                                        onClick={() => {allocations.openCreatePage({
+                                          date: new Date(date).getTime(),
+                                          resource: [resource.id]
+                                        })}}
+                                      >
+                                        <Icon size="min" type="plus" fontSource="hbicon" />
+                                      </li>
+                                    )}
+                                  </ul>
+                                )}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    }
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+      ```
+  - **setDataParams({ filter, orderBy, pageSize, offset })**: 重新获取数据。
+    - **功能**: 在组件配置的基础上，动态追加筛选、修改排序或调整分页参数。
+    - **函数定义**: `setDataParams(params: { filter?: object, orderBy?: Array<{field: string, sort: 'asc'|'desc'}>, pageSize?: number, offset?: number })`
+    - **参数说明**:
+      - `filter`: 附加筛选条件对象（结构参考“数据筛选器”）。
+      - `orderBy`: 排序规则数组（最多 3 个字段）。会完全替换组件配置中的排序。
+        - `field`: Schema 中定义的 contents key 名。
+        - `sort`: `'asc'` (正序) 或 `'desc'` (倒序)。
+      - `pageSize`: 每页条数（正整数，最大 500）。
+      - `offset`: 数据偏移量（0 或正整数，用于翻页）。
+    - **示例代码**: 详见 `list_data_params_demo.js` (实现了自定义搜索、排序、翻页及页码控制)。
+  - **setRelationFilter(filter)**: 触发联动筛选。
+    - **前提**:
+      1. Schema 中数据项需配置 `"show_relation_filter": true`。
+      2. 用户在组件设置中已配置联动规则（此时 `props.data.dataSourceId.has_relation_filter` 为 true）。
+    - **函数定义**: `setRelationFilter(filter?: object)`
+    - **参数**: `filter` (可选) - 筛选条件对象。不传参数则清空联动筛选。
+    - **典型流程**:
+      1. 判断 `has_relation_filter` 是否为 true。
+      2. 构造筛选条件（如 `{ field: 'title', query: { in: [value] } }`）。
+      3. 调用 `setRelationFilter([filter])`。
+    - **示例代码**: 详见 `relation_filter_demo.js` (展示了“查看数据”与“联动筛选”两种模式的切换与实现)。
+  - **getItemClickProps(item)**: 获取点击跳转的配置属性（用于自定义跳转逻辑）。
+  - **背景**: 当开发者需要完全自定义点击行为（而非使用封装好的 `onItemClick`），但又想复用组件配置中的“跳转目标”和“打开方式”设置时，可使用此方法。它将配置解析为可直接传给 `openURL` 的参数对象。
+  - **函数定义**: `getItemClickProps(item: object)`
+  - **参数**: `item` (必填) - 整条数据对象。
+  - **返回值**: `object`
+    - `type`: `string` (必有) - 目标类型 ('page', 'table', 'item', 'url')。
+    - `id`: `number` (可能为空) - 目标 ID（非链接类型必有）。
+    - `url`: `string` (可能为空) - 目标 URL（链接类型必有）。
+    - `openNewTab`: `boolean` (必有) - 是否在新页面打开。
+  - **示例代码**:
+    ```javascript
+    import React from 'react';
+    
+    export default function (props) {
+      const item_data = props?.data?.item_data;
+      const list = item_data?.items && item_data?.items.map((item, index) => {
+        const linkProps = item_data.getItemClickProps(item); // 调用 getItemClickProps 方法返回结果
+        return (
+          <li
+            key={index}
+            className="hover:bg-[var(--page-widget-main-4)] leading-[20px] rounded-[6px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap"
+          >
+            {linkProps && linkProps.type === 'url' && linkProps.url ? (
+              <a
+                href={linkProps.url}
+                target={linkProps.openNewTab ? '_blank' : '_self'}
+                onClick={(event) => {event.stopPropagation();}}
+                className="py-1.5 px-2 w-full block"
+              >
+                {item?.title?.value}
+              </a>
+            ) : (
+              item?.title?.value
+            )}
+          </li>
+        );
+      });
+    
+      return <ul className="list-none p-0">{list}</ul>;
+}
+```
+
+### 7.3 设置 (props.custom_setting)
+通过 `props.custom_setting` 可获取到组件的自定义设置的结果。
+例如：在 Schema 中自定义设置中添加了 key 名为“key1”的设置，则可通过 `props.custom_setting.key1` 取得数据。
+
+#### 各类型设置项目返回的数据结构
+- **开关 (switch)**: 返回 `boolean` 值，例如：`true` 或 `false`。
+- **选项 (select)**: 返回所选备选项的数组，即使单选也会返回数组结构。数组项为 `option_list` 中所设置的每一项的 ID 文本，例如：`["a", "b"]`。
+- **数值 (number)**: 返回数值，例如：`20`。
+- **文本 (text)**: 返回文本，例如：`abc`。
+- **多行文本 (multiText)**: 返回带有换行符的文本。如需通过 HTML 展示出换行，需包裹 `<pre></pre>`，例如：`<pre>aaa\nbbb</pre>`。
+- **富文本 (rich)**: 返回带有 HTML 标签的文本，例如：`<p><b>AAA</b></p>`。
+- **图片选择器 (image)**: 返回图片的通用文件对象，主要参数：
+  - `name`: string，文件名
+  - `link`: object，文件链接（动态生成，48小时有效）
+  - `source`: string，原始文件链接
+  - `download`: string，直接触发下载的原始文件链接
+  - `small`: string，小图链接 (120*120)
+  - `medium`: string，中图链接 (40*3000)
+  - `large`: string，大图链接 (1000*3000)
+  - `square`: string，方图链接 (320*320)
+  - `size`: number，文件大小 (KB)
+  - `ext`: string，文件扩展名
+- **背景选择器 (background)**: 返回用于 React DOM `style` 属性的对象结构。
+- **颜色选择器 (color)**: 返回用于 CSS `color` 属性的值，例如：`var(--red-color-700)`。
+- **图标选择器 (icon)**: 返回用于 Icon 组件的 `data` 属性的对象。
+  - `finalImage.src`: 图标原始文件链接。
+
+### 7.4 素材 (props.media)
+通过 `props.media` 可获取到组件自定义的设置中所有上传的素材。
+例如：在素材中上传了一个图片后，改名为“plus”，则可通过 `props.media.plus` 取得该素材图片的链接地址。
+
+### 7.5 环境与系统数据 (props.env / props.system)
+
+#### 环境数据 (props.env)
+- `props.env.is_mobile`: `boolean` - 是否为移动端模式（包括编辑模式）。
+- `props.env.is_narrow_screen`: `boolean` - 是否为窄屏模式（如侧边栏打开）。
+- `props.env.theme_mode`: `string` - 当前主题 (`light` / `dark`)。
+- `props.env.language`: `string` - 当前语言 (`zh-CN` / `en-US`)。
+- `props.env.content_text_color_type`: `string` - 组件当前文字颜色 (`light` / `dark`)。
+
+#### 系统数据
+- **props.page_id**: `number` - 页面 ID。
+- **props.widget_id**: `number` - 组件 ID。
+- **props.current_item.id**: `number` - 当前数据 ID（仅详情页可用）。
+
+### 7.6 常用工具函数
+
+需引入：`import { ... } from '@huoban/page-client-toolkit';`
+
+- **openURL({ type, id, url, openNewTab })**: 打开链接或系统页面。
+  - **说明**: 在开发自定义组件时，如要打开链接，尤其是打开系统内的功能链接，则需使用 `openURL()` 方法，可实现产品内跳转，并可兼容页面分享场景。
+  - **参数**:
+    - `type`: `string` (必填) - 打开的目标类型，备选项有 `page` 页面、`table` 表格、`item` 数据详情、`item_create` 数据创建、`item_edit` 数据编辑、`url` 链接。
+    - `id`: `number | string` (可选) - 目标 ID，打开非链接的类型时必填，如果为 `item_create` 数据创建时这里需填入数据源的 ID 或表格 ID。
+    - `url`: `string` (可选) - 目标 URL，打开链接的类型时必填。
+    - `openNewTab`: `boolean` (必填) - 是否在新页面打开。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具包，并提取出 openURL 方法
+    import { openURL } from '@huoban/page-client-toolkit';
+
+    export default function (props) {
+      const table_id  = props?.data?.item_data?.field_configs?.title?.table_id;
+      const item_id  = props?.data?.item_data?.item?.id;
+      
+      const button_class = "hover:bg-[var(--page-widget-main-4)] leading-[20px] w-full py-2 px-2 rounded-[6px] flex items-center justify-center flex-row gap-[4px] border border-[var(--page-widget-main-8)] cursor-pointer";
+      
+      return (
+        <div className="p-0 flex items-center flex-col gap-[10px]">
+          <div onClick={() => openURL({ type: 'page', id: 7000000002365318, openNewTab: false })} className={button_class}>
+            打开“Schema 组件描述文件”页面
+          </div>
+          <div onClick={() => openURL({ type: 'table', id: table_id, openNewTab: false })} className={button_class}>
+            打开数据源表格
+          </div>
+          <div onClick={() => openURL({ type: 'item_create', id: 'item_data', openNewTab: false })} className={button_class}>
+            打开数据源数据创建（数据源key名）
+          </div>
+          <div onClick={() => openURL({ type: 'item_create', id: table_id, openNewTab: false })} className={button_class}>
+            打开数据源数据创建（数据源表格ID）
+          </div>
+          <div onClick={() => openURL({ type: 'item', id: item_id, openNewTab: false })} className={button_class}>
+            打开数据源数据详情
+          </div>
+          <div onClick={() => openURL({ type: 'item_edit', id: item_id, openNewTab: false })} className={button_class}>
+            打开数据源数据编辑
+          </div>
+          <div onClick={() => openURL({ type: 'url', url: 'https://www.domain.com', openNewTab: true })} className={button_class}>
+            打开“https://www.domain.com”链接
+          </div>
+        </div>
+      );
+    }
+    ```
+
+- **previewFiles({ files, currentIndex, downloadVisible })**: 全屏预览图片/附件。
+  - **说明**: 组件获取到图片、附件类数据时，如希望在组件内可点击图片进行预览，则可引入 `FileViewer` 组件，即可实现预览。
+  - **注意事项**: 需配合 `e.stopPropagation()` 使用，防止触发父级点击事件。
+  - **参数**:
+    - `files`: `file[]` (必填) - 文件对象数组，从数据源获取到的图片、附件字段的数据，其 value 值即为文件对象数组。
+    - `currentIndex`: `number` (可选) - 打开文件预览器时定位到文件数组的第几个文件，从 0 开始，留空默认为第一个图片。
+    - `downloadVisible`: `boolean` (可选) - 是否显示文件的下载按钮，默认为 true。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具包，并提取出 previewFiles 方法
+    import { previewFiles } from '@huoban/page-client-toolkit';
+
+    export default function (props) {
+      const item_data  = props?.data?.item_data;
+      return (
+        <ul className="list-none p-0">
+           {item_data?.items.map((item, index) => (
+            <li
+              key={index}
+              className="hover:bg-[var(--page-widget-main-4)] leading-[20px] py-2 px-2 rounded-[6px] flex items-center cursor-pointer"
+              onClick={() => {item_data?.onItemClick(item);}}
+            >
+              {/* 以 onClick 点击事件的形式调用预览文件方法，参数传入文件对象的数组 */}
+              <img
+                src={item?.cover?.value[0].link?.medium}
+                className="w-[80px] h-[60px] rounded-[6px] object-cover mr-[8px] cursor-pointer"
+                onClick={(e) => {
+                  previewFiles({
+                  	files: item?.cover?.value,
+                  	currentIndex: 0,
+                  	downloadVisible: false
+                  });
+                  e.stopPropagation();
+                }}
+              />
+              <span>{item?.title?.value}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    ```
+
+- **localize(text, { 'zh-CN': '...', 'en-US': '...' })**: 多语言支持。
+  - **说明**: 在开发自定义组件时，如要处理中英文语言的切换问题，则需使用 `localize()` 方法，提供中文、英文的语言文本，系统会根据用户所选的语言环境进行自动调用。
+  - **参数**:
+    - `text`: `string` (必填) - 语言包的默认文本，当指定语言未设置文本时会使用默认文本。
+    - `options`: `object` (可选) - 语言包配置对象。
+      - `'zh-CN'`: `string` (可选) - 中文语言。
+      - `'en-US'`: `string` (可选) - 英文语言。
+  - **示例代码**:
+    ```javascript
+    // 引入页面客户端工具包，并提取出 localize 方法
+    import { localize } from '@huoban/page-client-toolkit';
+
+    export default function (props) {
+      return (
+        <div className="p-0 flex flex-col gap-[10px]">
+          <div>仅设置默认文本：{localize('默认文本')}</div>
+          <div>设置默认和中文：{localize('默认文本', { 'zh-CN': '中文' })}</div>
+          <div>设置默认和英文：{localize('默认文本', { 'en-US': 'English' })}</div>
+          <div>设置默认和中英文：{localize('默认文本', { 'zh-CN': '中文', 'en-US': 'English' })}</div>
+        </div>
+      );
+    }
+    ```
+
+- **setWidgetTitle(({ title }) => { string || ReactNode })**: 动态修改组件标题。
+  - **说明**: 需要在现有组件的标题中增加显示自定义内容，则可以调用 `setWidgetTitle()` 方法。
+  - **参数**:
+    - `callback`: `({ title }) => { string || ReactNode }` (必填) - 回调函数。
+      - `title`: `string` (必有) - 组件的原始标题。
+      - **返回值**: `string | ReactNode` (必有) - 设置组件的新标题。
+  - **示例代码**:
+    ```javascript
+    import { useEffect, useState } from 'react';
+    import { setWidgetTitle, HBUI } from '@huoban/page-client-toolkit';
+    const { Icon } = HBUI;
+
+    export default function (props) {
+      const [count, setCount] = useState(0);
+      
+      useEffect(() => {
+        // 调用设置组件标题的方法
+        // 方法的的参数可以传入一个函数，函数的入参为对象，对象提供 title 属性，用来提供组件的原始标题
+        setWidgetTitle(({ title }) => {
+          return (
+            <span style={{display: "flex", alignItems: "center", gap: "4px"}}>
+              {title}
+              <Icon size="base" fontSource="emoji" type="u1f600" />
+              <span style={{ fontWeight: "400" }}>×</span>
+              <span style={{ fontWeight: "400" }}>{count}</span>
+            </span>
+          )
+        })
+      }, [count]);
+
+      const addNumber = () => {
+        setCount(c => ++c);
+      };
+      
+      return (
+        <button
+          onClick={addNumber}
+          style={{
+            color: "var(--custom-text-reverse)",
+            backgroundColor: "var(--custom-accent)",
+            borderRadius: "var(--custom-radius-base)",
+            padding: "4px 8px"
+          }}>
+          点击 +1
+        </button>
+      );
+    }
+    ```
+
+- **createCustomMountPointPortal(ReactDom)**: 将组件渲染到页面全局挂载点。
+  - **说明**: 在设计页面时，我们有时需要将一个开发的自定义组件占满整个页面，来实现移动端浏览的最佳体验，并可自适应手机浏览的屏幕尺寸。这时就可以利用页面级自定义组件渲染 Dom 元素时的全局挂载点“custom-mount-point”来实现。
+  - **用法**: `if (props.env.is_mobile) return createCustomMountPointPortal(content);`
+  - **示例代码**:
+    ```javascript
+    import { createCustomMountPointPortal } from '@huoban/page-client-toolkit';
+
+    export default function (props) {
+      const contentDom = (
+        <div style={{height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"}}>
+          <strong style={{fontSize: "16px"}}>要渲染的内容</strong>
+          <p style={{opacity: 0.65}}>网页端会留在组件中，移动端会显示为全屏</p>
+        </div>
+      );
+
+      // 仅在移动端才将内容渲染到全局挂载点中
+      if (props?.env?.is_mobile) {
+        return createCustomMountPointPortal(contentDom);
+      }
+
+      return contentDom;
+    }
+    ```
+  - **调整全局挂载点的样式**:
+    自定义样式：使得在移动端时让全局挂载点撑满全屏，并提高高度+背景色来覆盖背后的页面区域。
+    ```css
+    /* 让挂载点在移动端下撑满全屏，覆盖住底部的页面 */
+    [data-c-type="custom-mount-point"][data-device-type="mobile"] {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      background-color: var(--background-1);
+    }
+
+    /* 让渲染组件的容器再次撑满全屏 */
+    [data-c-type="custom-mount-point-node"] {
+      height: 100%;
+    }
+    ```
+
+- **BrowserHelper**: 浏览器环境检测。
+  - **说明**: 详见 7.1 章节或上方详细说明。
+
+- **Lodash**: 实用工具库。
+  - **说明**: Lodash 提供了大量用于操作数组、对象、字符串等数据类型的工具函数。例如，它可以方便地对数组进行过滤、排序、映射等操作。对于对象，能够进行深度克隆、属性获取和设置等功能。在处理复杂的数据结构时，这些功能非常实用。还包括了函数式编程的工具，像 `_.curry` 可以将一个多参数函数转换为一系列单参数函数，方便函数的复用和组合。更多使用 Lodash 的方法，可以询问 AI 来获得支持。
+  - **用法**: `import _ from 'lodash';`
+  - **示例代码**:
+    ```javascript
+    // 引入 Lodash 工具包
+    import _ from 'lodash';
+
+    export default (props) => {
+      return <div>{`${_.isBoolean(true)}`}</div>
+    }
+    ```
+
+### 7.7 React Hooks (hooks)
+
+需引入：`import { hooks } from '@huoban/page-client-toolkit';`
+
+- **useCreation(factory, deps)**: 创建单例对象（如 Service 实例）。
+  - **作用**: `useCreation()` 用于创建一个对象的实例，并确保该实例在组件的整个生命周期中只有一个。即使组件因为其他状态更新而重新渲染，通过 `useCreation()` 创建的对象的引用也不会改变。
+  - **与 useMemo() 的区别**: 虽然 `useMemo()` 也可以用于记忆值，但 `useMemo()` 的主要目的是缓存计算结果，如果依赖项数组为空，它也会在首次渲染时计算并缓存。然而，`useCreation()` 更强调“创建一次”的语义，特别适用于那些创建成本高昂或不应该被重新创建的实例（例如 WebSocket 连接、RxJS Subject 实例等）。它保证了工厂函数只执行一次（除非依赖项变化，但通常用于空依赖项以实现单例）。
+  - **示例代码**:
+    ```javascript
+    import React, { useState, useEffect } from 'react';
+    import { hooks } from '@huoban/page-client-toolkit';
+    const { useCreation } = hooks;
+
+    // 模拟一个创建成本较高的服务类
+    class AnalyticsService {
+      serviceId;
+      constructor() {
+        this.serviceId = `analytics-${Math.random().toString(36).substring(2, 10)}`;
+        console.debug(`[AnalyticsService] Instance CREATED with ID: ${this.serviceId}`);
+      }
+
+      trackEvent(eventName, eventData) {
+        console.debug(`[AnalyticsService] (${this.serviceId}) Event: ${eventName}`, eventData);
+      }
+    }
+
+    export default function UseCreationDemo(props) {
+      const [count, setCount] = useState(0);
+
+      // 使用 useCreation 来创建 AnalyticsService 实例
+      // 即使组件因为 count 变化而重新渲染，analyticsService 的实例也只会创建一次。
+      const analyticsService = useCreation(() => new AnalyticsService(), []);
+
+      useEffect(() => {
+        console.debug('[UseCreationDemo] Component re-rendered. Current count:', count);
+        // 每次渲染时，我们都可以使用同一个 analyticsService 实例
+        analyticsService.trackEvent('component_render', { count });
+      }, [count, analyticsService]);
+
+      const handleIncrement = () => {
+        setCount(prevCount => prevCount + 1);
+        analyticsService.trackEvent('button_click', { action: 'increment', newCount: count + 1 });
+      };
+
+      return (
+        <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
+          <h2 className="text-2xl font-bold text-center text-blue-600">useCreation 示例</h2>
+          <p className="text-gray-700">
+            <code>AnalyticsService</code> 实例 ID: <span className="font-mono text-purple-600">{analyticsService.serviceId}</span>
+          </p>
+          <p className="text-gray-700">
+            当前计数: <span className="font-bold text-xl text-green-600">{count}</span>
+          </p>
+          <button
+            onClick={handleIncrement}
+            className="w-full px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 transition duration-150 ease-in-out"
+          >
+            增加计数 (触发重新渲染)
+          </button>
+          <p className="text-sm text-gray-500 mt-4">
+            请观察控制台输出。<code>AnalyticsService</code> 实例只会在首次渲染时创建一次，即使组件因计数变化而重新渲染。
+          </p>
+        </div>
+      );
+    }
+    ```
+- **useMemoizedFn(fn)**: 持久化函数引用，避免子组件重渲染。
+  - **作用**: `useMemoizedFn()` 用于创建一个函数，并确保该函数的引用永远不会改变。这对于性能优化非常重要，特别是当函数作为 props 传递给子组件时，可以避免因为父组件重新渲染导致函数引用变化，从而避免子组件不必要的重新渲染。
+  - **与 useCallback() 的区别**: `useCallback((...args) => { fnRef.current(...args) }, [])` 会在依赖项变化时返回一个新的函数引用。而 `useMemoizedFn()` 返回的函数引用是永久不变的。它内部通过 `useRef()` 来持有最新的函数实现，所以即使函数内部依赖了组件的 `state` 或 `props`，它在执行时总能访问到最新的值，同时保持外部引用的稳定。
+  - **示例代码**:
+    ```javascript
+    import React, { useState, useCallback, memo } from 'react';
+    import { hooks } from '@huoban/page-client-toolkit';
+    const { useMemoizedFn } = hooks;
+
+    // 使用 React.memo 包装子组件，以便在 props 没有改变时阻止不必要的重新渲染
+    const MemoizedChildComponent = memo(({ id, onButtonClick }) => {
+      console.debug(`[ChildComponent ${id}] Rendered`);
+      return (
+        <button
+          onClick={() => onButtonClick(id)}
+          className="mt-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 transition duration-150 ease-in-out"
+        >
+          点击子组件 ({id})
+        </button>
+      );
+    });
+
+    export default (props) => {
+      const [count, setCount] = useState(0);
+      const [anotherState, setAnotherState] = useState(0); // 用于触发父组件渲染但不影响回调逻辑的状态
+
+      console.debug('[ParentComponent] Rendered. Count:', count, 'AnotherState:', anotherState);
+
+      // 使用 useMemoizedFn 来包装回调函数
+      // handleChildClick 的函数引用将永远不会改变。
+      // 即使父组件因为 count 或 anotherState 变化而重新渲染，
+      // 传递给 MemoizedChildComponent 的 onButtonClick prop 引用也是稳定的。
+      const handleChildClick = useMemoizedFn((childId) => {
+        // 即使 handleChildClick 的引用不变，它也能访问到最新的 count 值
+        console.debug(`Child ${childId} clicked! Current parent count: ${count}`);
+        // 可以在这里做一些依赖 count 的事情
+      });
+
+      // 作为对比，这是一个使用 useCallback 的函数
+      // 当 count 变化时，这个函数的引用会改变，导致依赖它的子组件重新渲染
+      const handleChildClickWithUseCallback = useCallback((childId) => {
+        console.debug(`(useCallback) Child ${childId} clicked! Current parent count: ${count}`);
+      }, [count]); // 依赖 count，count 变则引用变
+
+      return (
+        <div className="p-6 max-w-lg mx-auto bg-white rounded-xl shadow-md space-y-4">
+          <h2 className="text-2xl font-bold text-center text-indigo-600">useMemoizedFn 示例</h2>
+          <p className="text-gray-700">
+            父组件计数: <span className="font-bold text-xl text-red-600">{count}</span>
+          </p>
+          <p className="text-gray-700">
+            父组件另一状态: <span className="font-bold text-xl text-orange-600">{anotherState}</span>
+          </p>
+          <div className="space-x-2">
+            <button
+              onClick={() => setCount(c => c + 1)}
+              className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75 transition duration-150 ease-in-out"
+            >
+              增加计数 (影响回调逻辑)
+            </button>
+            <button
+              onClick={() => setAnotherState(s => s + 1)}
+              className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition duration-150 ease-in-out"
+            >
+              改变另一状态 (仅触发父组件渲染)
+            </button>
+          </div>
+
+          <div className="mt-4 p-4 border border-dashed border-gray-300 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-800">使用 `useMemoizedFn` 的子组件:</h3>
+            <MemoizedChildComponent id="A" onButtonClick={handleChildClick} />
+            <p className="text-xs text-gray-500 mt-1">
+              当父组件的 "另一状态" 改变时，此子组件不会重新渲染，因为 <code>handleChildClick</code> 的引用是稳定的。
+              当 "父组件计数" 改变时，此子组件也不会因为 <code>onButtonClick</code> prop 的引用变化而重新渲染。
+            </p>
+          </div>
+
+          <div className="mt-4 p-4 border border-dashed border-gray-300 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-800">使用 `useCallback` (依赖 count) 的子组件:</h3>
+            <MemoizedChildComponent id="B" onButtonClick={handleChildClickWithUseCallback} />
+            <p className="text-xs text-gray-500 mt-1">
+              当父组件的 "父组件计数" (<code>count</code>) 改变时，此子组件会重新渲染，因为 <code>handleChildClickWithUseCallback</code> 的引用会改变。
+              当 "另一状态" 改变时，此子组件不会重新渲染。
+            </p>
+          </div>
+           <p className="text-sm text-gray-500 mt-4">
+            请观察控制台输出。比较 `MemoizedChildComponent` 在不同情况下的渲染行为。
+          </p>
+        </div>
+      );
+    };
+    ```
+
+### 7.8 CSS 变量系统
+
+组件运行在三层样式环境中（系统 -> 页面 -> 组件）。建议使用专为自定义组件提供的 CSS 样式变量，来保持风格的统一性，同时又可自动根据环境的变化（如深浅色模式）而变化，而无需做额外处理。
+
+**RGB 色值说明**:
+在提供的颜色变量中，大多以 HEX 格式提供色值。如果变量名末尾以 `rgb` 结尾，代表其值为 `r, g, b` 格式，需要配合 `rgb()` 或 `rgba()` 使用。
+- 示例: `color: rgb(var(--custom-main-text-rgb));`
+- 示例: `color: rgba(var(--custom-main-text-rgb), 0.25);`
+
+#### 7.8.1 系统文字色
+跟随系统深浅色而变化，浅色模式为深色系，深色模式为浅色系。
+
+- **默认文字**:
+  - `var(--custom-main-text)`
+  - `var(--custom-main-text-rgb)`
+- **标题文字 (Title)**:
+  - `var(--custom-main-text-title)`
+- **主要文字 (Primary)**:
+  - `var(--custom-main-text-primary)`
+- **次要文字 (Secondary)**:
+  - `var(--custom-main-text-secondary)`
+- **说明文字 (Description)**:
+  - `var(--custom-main-text-description)`
+- **禁用文字 (Disabled)**:
+  - `var(--custom-main-text-disabled)`
+
+#### 7.8.2 组件文字色
+跟随组件样式设置中文字颜色的深浅色而变化。
+
+- **基础文字**:
+  - `var(--custom-text)`
+  - `var(--custom-text-rgb)`
+- **标题文字 (Title)**:
+  - `var(--custom-text-title)`
+- **主要文字 (Primary)**:
+  - `var(--custom-text-primary)`
+- **次要文字 (Secondary)**:
+  - `var(--custom-text-secondary)`
+- **说明文字 (Description)**:
+  - `var(--custom-text-description)`
+- **禁用文字 (Disabled)**:
+  - `var(--custom-text-disabled)`
+
+#### 7.8.3 组件文本反色
+跟随组件样式设置中文字颜色的深浅色而变化，浅色模式为深色，深色模式为浅色。
+
+- **基础反色**:
+  - `var(--custom-text-reverse)`
+  - `var(--custom-text-reverse-rgb)`
+
+#### 7.8.4 系统交互背景色
+在列表型元素的 Hover 背景、选中元素的高亮背景中，通常使用文字色或强调色作为背景色。系统会自动处理深浅色模式下的透明度差异。
+
+- **默认填充**:
+  - `var(--custom-main-fill)`
+- **Hover 背景**:
+  - `var(--custom-main-hover)`
+- **Active/Selected 背景**:
+  - `var(--custom-main-active)`
+
+#### 7.8.5 系统背景色
+- **基础背景**:
+  - `var(--custom-main-bg)`
+  - `var(--custom-main-bg-rgb)`
+- **容器背景**:
+  - `var(--custom-main-bg-container)`
+- **浮层背景 (Elevated)**:
+  - `var(--custom-main-bg-elevated)`
+- **弹窗背景 (Popup)**:
+  - `var(--custom-main-bg-popup)`
+
+#### 7.8.6 系统边线色
+- **主要边框**:
+  - `var(--custom-main-border-primary)`
+- **次要边框**:
+  - `var(--custom-main-border-secondary)`
+
+#### 7.8.7 强调主色
+来自页面设置中设置的强调色，常用于高亮色使用。
+
+- **基础强调色**:
+  - `var(--custom-accent)`
+  - `var(--custom-accent-rgb)`
+- **浅色变体**:
+  - `var(--custom-accent-light-1)`
+  - `var(--custom-accent-light-2)`
+- **深色变体**:
+  - `var(--custom-accent-dark-1)`
+  - `var(--custom-accent-dark-2)`
+- **强调色背景**:
+  - `var(--custom-accent-fill)`
+  - `var(--custom-accent-hover)`
+  - `var(--custom-accent-active)`
+
+#### 7.8.8 状态色
+系统在成功、警告、异常、链接、通用场景下给定的颜色。
+
+- **成功 (Success)**:
+  - `var(--custom-success)`
+  - `var(--custom-success-rgb)`
+  - 背景: `var(--custom-success-fill)`, `var(--custom-success-hover)`, `var(--custom-success-active)`
+- **警告 (Warning)**:
+  - `var(--custom-warning)`
+  - `var(--custom-warning-rgb)`
+  - 背景: `var(--custom-warning-fill)`, `var(--custom-warning-hover)`, `var(--custom-warning-active)`
+- **错误 (Error)**:
+  - `var(--custom-error)`
+  - `var(--custom-error-rgb)`
+  - 背景: `var(--custom-error-fill)`, `var(--custom-error-hover)`, `var(--custom-error-active)`
+- **通用 (Normal)**:
+  - `var(--custom-normal)`
+  - `var(--custom-normal-rgb)`
+  - 背景: `var(--custom-normal-fill)`, `var(--custom-normal-hover)`, `var(--custom-normal-active)`
+
+#### 7.8.9 组件边线色
+跟随组件样式设置中文字颜色的深浅色而变化，浅色模式为浅色系，深色模式为深色系。
+
+- **主要边框**:
+  - `var(--custom-border-primary)`
+- **次要边框**:
+  - `var(--custom-border-secondary)`
+
+#### 7.8.10 组件交互背景色
+跟随组件样式设置中文字颜色的深浅色而变化，浅色模式为浅色系，深色模式为深色系。
+
+- **默认填充**:
+  - `var(--custom-fill)`
+- **Hover 背景**:
+  - `var(--custom-hover)`
+- **Active/Selected 背景**:
+  - `var(--custom-active)`
+
+#### 7.8.11 组件背景色
+跟随组件样式设置中背景颜色而变化，背景为图片或非卡片模式时，背景为透明色。
+
+- **基础背景**:
+  - `var(--custom-bg)`
+  - `var(--custom-bg-rgb)`
+
+#### 7.8.12 字体大小
+字体大小，常规文字分为：小号，基础，大号。排版文字分为 H1~H6。
+
+- **常规文字**:
+  - `var(--custom-font-size-small)`
+  - `var(--custom-font-size-base)`
+  - `var(--custom-font-size-large)`
+- **排版文字**:
+  - `var(--custom-font-size-h6)`
+  - `var(--custom-font-size-h5)`
+  - `var(--custom-font-size-h4)`
+  - `var(--custom-font-size-h3)`
+  - `var(--custom-font-size-h2)`
+  - `var(--custom-font-size-h1)`
+
+#### 7.8.13 字体行高大小
+配合字体大小使用，行高与字体大小一一对应。
+
+- **常规行高**:
+  - `var(--custom-line-height-small)`
+  - `var(--custom-line-height-base)`
+  - `var(--custom-line-height-large)`
+- **排版行高**:
+  - `var(--custom-line-height-h6)`
+  - `var(--custom-line-height-h5)`
+  - `var(--custom-line-height-h4)`
+  - `var(--custom-line-height-h3)`
+  - `var(--custom-line-height-h2)`
+  - `var(--custom-line-height-h1)`
+
+#### 7.8.14 圆角大小
+系统使用的默认圆角，常用于输入框、按钮、小弹层的圆角角度。
+
+- **小号圆角**:
+  - `var(--custom-radius-small)`
+- **基础圆角**:
+  - `var(--custom-radius-base)`
+- **中号圆角**:
+  - `var(--custom-radius-middle)`
+- **大号圆角**:
+  - `var(--custom-radius-large)`
+
+#### 7.8.15 阴影
+系统使用的默认阴影，常用于弹层、凸起的卡片增加的阴影。
+
+- **一级阴影**:
+  - `var(--custom-box-shadow-1)`
+- **二级阴影**:
+  - `var(--custom-box-shadow-2)`
+
+### 7.9 移动端样式兼容
+
+在网页端和移动端如果需要做不同的样式处理，可以通过 CSS 属性选择器来限定生效的设备范围。
+
+- **仅在网页端生效**: `[data-device-type="desktop"] {...}`
+- **仅在移动端生效**: `[data-device-type="mobile"] {...}`
+
+**示例**:
+```css
+/* 默认样式（通用） */
+.my-widget {
+  font-size: 14px;
+}
+
+/* 仅在网页端调整字体大小 */
+[data-device-type="desktop"] .my-widget {
+  font-size: 16px;
+}
+
+/* 仅在移动端调整内边距 */
+[data-device-type="mobile"] .my-widget {
+  padding: 12px;
+}
+```
+
+## 8. 异常处理
+
+当页面加载自定义组件代码出现崩溃时，可在浏览器 URL 中增加 `?noCustomCode=1` 参数，来禁用自定义组件代码的运行。这在调试或紧急恢复页面访问时非常有用。
+
+---
+
+## 9. 实战经验与常见问题解决方案
+
+本章节汇总了在实际开发过程中常见的问题、易错点及经过验证的最佳实践方案。
+
+### 9.1 事件冒泡导致交互冲突
+**现象**: 在列表项（Item）上绑定了 `onItemClick` 跳转事件，同时在列表项内部有“预览图片”或“点击按钮”的操作。点击内部元素时，意外触发了外层的跳转。
+**解决方案**: 在内部元素的点击事件处理函数中，必须显式调用 `e.stopPropagation()`。
+```javascript
+// 错误写法
+<img onClick={() => previewFiles(...)} />
+
+// 正确写法
+<img onClick={(e) => {
+  e.stopPropagation(); // 关键：阻止事件冒泡
+  previewFiles(...);
+}} />
+```
+
+### 9.2 移动端全屏组件的样式覆盖
+**现象**: 使用 `createCustomMountPointPortal` 将组件挂载到全局后，背景色未完全覆盖底层页面，或者层级不够。
+**解决方案**: 必须配合特定的 CSS 选择器来强制覆盖样式。
+```css
+/* 确保挂载点在移动端绝对定位并撑满屏幕 */
+[data-c-type="custom-mount-point"][data-device-type="mobile"] {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 999; /* 提高层级 */
+  background-color: var(--page-body-background); /* 使用系统背景色变量 */
+}
+```
+
+### 9.3 函数引用导致的不必要渲染
+**现象**: 使用 `useCallback` 包装的函数作为 props 传递给子组件，但当 `useCallback` 的依赖项变化时，函数引用改变，导致子组件（即使使用了 `React.memo`）依然重渲染。
+**解决方案**: 使用 `hooks.useMemoizedFn`。
+- **优势**: 保证函数引用地址永远不变，同时在调用时能获取到最新的 state/props。
+- **场景**: 传递给重型子组件（如地图、图表）的事件回调。
+
+### 9.4 复杂对象的单例维护
+**现象**: 在组件中创建非 React 响应式的复杂对象（如 `new AMap.Map` 或 `new Service()`），使用 `useMemo` 偶尔会被 React 重新计算（React 官方文档指出 `useMemo` 不保证语义上的完全只执行一次）。
+**解决方案**: 使用 `hooks.useCreation`。
+- **优势**: 确保工厂函数在组件生命周期内严格只执行一次。
+
+### 9.5 组件崩溃后的紧急恢复
+**现象**: 修改代码后组件抛出严重错误（如 `undefined` 报错），导致页面白屏或无限循环，无法点击“编辑”按钮修复代码。
+**解决方案**:
+1. 在浏览器 URL 参数中追加 `&noCustomCode=1`（如果已有参数）或 `?noCustomCode=1`。
+2. 刷新页面，此时自定义组件将停止运行，可安全进入编辑模式修复代码。
+
+### 9.6 链接跳转与权限控制
+**现象**: 需要自定义渲染列表，但希望复用系统配置的“跳转目标”和“打开方式”（如配置了跳转到详情页或新窗口打开）。
+**解决方案**: 不要手动拼接 URL，而是使用 `getItemClickProps(item)` 获取配置，结合 `openURL` 使用。
+```javascript
+const props = item_data.getItemClickProps(item);
+// props 包含: type, id, url, openNewTab
+openURL(props);
+```
+
+### 9.7 数据更新与权限校验
+**现象**: 调用 `updateItemDetail` 更新数据时，有时会失败且无明确提示，或者在字段只读时仍然显示了编辑 UI。
+**解决方案**: 在调用更新方法前，必须进行严格的权限校验。
+1. **整条数据权限**: 检查 `rights.items` (列表) 或 `rights.item` (详情) 是否包含 `'update'`。
+2. **字段级权限**: 检查数据项中的 `can_update` (是否可更新)、`can_lock` (是否可锁定)、`locked` (是否已锁定)。
+   - **注意**: 如果 `locked` 为 true 且 `can_lock` 为 false，则即使 `can_update` 为 true 也不可编辑。
+
+### 9.8 默认值填充的类型陷阱
+**现象**: 调用 `openCreatePage` 传入默认值时，选项或关联字段的值不生效。
+**解决方案**: 必须严格遵守数据格式要求。
+- **选项/用户/关联**: 即使是单选，也**必须**传入数组格式 (e.g., `[1]`)。
+- **日期**: 支持 `current_day` 等动态字符串。
+- **便捷方式**: 直接使用 `raw_value` 是最稳妥的方式。
+```javascript
+// 错误
+openCreatePage({ user: 123 });
+
+// 正确
+openCreatePage({ user: [123] });
+// 或者直接使用原始值
+openCreatePage({ user: item.user.raw_value });
+```
+
+### 9.9 地图组件的生命周期管理
+**现象**: 快速切换页面或组件卸载时，控制台报错 "Map container is already initialized" 或内存泄漏。
+**解决方案**: 必须在 `useEffect` 的 cleanup 函数中销毁地图实例，并使用 `isMounted` 标志位防止异步回调在组件卸载后执行。
+```javascript
+useEffect(() => {
+  let isMounted = true;
+  // ... 初始化逻辑 ...
+  if (!isMounted) return;
+  
+  return () => {
+    isMounted = false;
+    if (mapInstance.current) {
+      mapInstance.current.destroy(); // 必须销毁
+      mapInstance.current = null;
+    }
+  };
+}, []);
+```
