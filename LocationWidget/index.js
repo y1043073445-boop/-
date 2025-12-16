@@ -67,7 +67,7 @@ export default function LocationWidget(props) {
         console.error("Failed to load map:", err);
         if (isMounted) {
           setLoading(false);
-          setError("Failed to load map SDK");
+          setError("地图组件加载失败");
         }
       }
     };
@@ -82,7 +82,7 @@ export default function LocationWidget(props) {
 
     const onError = (data) => {
       console.error('Location error:', data);
-      setError("Location failed: " + (data.message || "Unknown error"));
+      setError("定位失败：" + (data.message || "未知错误"));
     };
 
     initMap();
@@ -110,7 +110,7 @@ export default function LocationWidget(props) {
       {loading && (
         <div className="loading-overlay">
           <Loading size="default" />
-          <span className="loading-text">Locating...</span>
+          <span className="loading-text">正在定位...</span>
         </div>
       )}
 
