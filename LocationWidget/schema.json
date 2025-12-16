@@ -5,8 +5,8 @@
   "settings": {
     "zoom_level": {
       "type": "number",
-      "name": "Default Zoom Level",
-      "tips": "Set the initial zoom level of the map (3-18)",
+      "name": "默认缩放级别",
+      "tips": "设置地图的初始缩放级别（3-18），数值越大越详细",
       "default": 15
     }
   },
@@ -15,11 +15,11 @@
       "setting": [
         {
           "level": 1,
-          "title": "Map Settings",
+          "title": "地图设置",
           "children": [
             {
               "level": 3,
-              "title": "Zoom Level",
+              "title": "缩放级别",
               "setting_key": "zoom_level"
             }
           ]
