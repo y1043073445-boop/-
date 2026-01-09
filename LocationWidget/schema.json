@@ -1,0 +1,34 @@
+{
+  "system_settings": {
+    "data_sources": []
+  },
+  "settings": {
+    "zoom_level": {
+      "type": "number",
+      "name": "默认缩放级别",
+      "tips": "设置地图的初始缩放级别（3-18），数值越大越详细",
+      "default": 15
+    }
+  },
+  "layout": {
+    "web": {
+      "setting": [
+        {
+          "level": 1,
+          "title": "地图设置",
+          "children": [
+            {
+              "level": 3,
+              "title": "缩放级别",
+              "setting_key": "zoom_level"
+            }
+          ]
+        }
+      ],
+      "style": []
+    },
+    "mobile": {
+      "setting": []
+    }
+  }
+}
